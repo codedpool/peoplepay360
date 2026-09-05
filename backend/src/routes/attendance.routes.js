@@ -7,27 +7,51 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
-const { computeWorkedHours, computeOvertimeHours, deriveStatus } = require("../services/attendance");
+const { deriveAttendanceFields } = require("../services/attendance");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
 const dateTimeSchema = z.coerce.date();
 
-// workedHours and status are deliberately not accepted here — they're derived
-// server-side from checkIn/checkOut against the employee's schedule (Section 7).
-const createAttendanceSchema = z.object({
-  employeeId: z.string().uuid(),
-  checkIn: dateTimeSchema,
-  checkOut: dateTimeSchema.nullable().optional(),
-});
+// A check-out before its own check-in produces negative worked time, which
+// every downstream calculation (worked hours, day fraction, payroll
+// proration) would then have to defend against. Rejected at the edge instead,
+// on every route that can set the pair — including the ones that only supply
+// one half and have to compare against what's already stored.
+const ORDER_MESSAGE = "Check-out must be after check-in";
+
+function checkOutAfterCheckIn(checkIn, checkOut) {
+  return !checkOut || checkOut.getTime() > checkIn.getTime();
+}
+
+// workedHours, dayFraction and status are deliberately not accepted here —
+// they're derived server-side from checkIn/checkOut against the employee's
+// schedule (Section 7).
+const createAttendanceSchema = z
+  .object({
+    employeeId: z.string().uuid(),
+    checkIn: dateTimeSchema,
+    checkOut: dateTimeSchema.nullable().optional(),
+  })
+  .refine((v) => checkOutAfterCheckIn(v.checkIn, v.checkOut), {
+    message: ORDER_MESSAGE,
+    path: ["checkOut"],
+  });
 
 // A correction may backfill/adjust either timestamp after the fact; it always
 // goes through this route so it's always audit-logged (never a raw DB edit).
-const correctAttendanceSchema = z.object({
-  checkIn: dateTimeSchema.optional(),
-  checkOut: dateTimeSchema.nullable().optional(),
-});
+// Only the pair it actually carries can be ordered here — a correction that
+// moves just one side is checked against the stored other side in the handler.
+const correctAttendanceSchema = z
+  .object({
+    checkIn: dateTimeSchema.optional(),
+    checkOut: dateTimeSchema.nullable().optional(),
+  })
+  .refine((v) => v.checkIn === undefined || checkOutAfterCheckIn(v.checkIn, v.checkOut), {
+    message: ORDER_MESSAGE,
+    path: ["checkOut"],
+  });
 
 async function loadScheduleForEmployee(employeeId) {
   const employee = await prisma.employee.findUnique({
@@ -103,9 +127,7 @@ router.post(
         employeeId,
         checkIn: req.body.checkIn,
         checkOut,
-        workedHours: computeWorkedHours(req.body.checkIn, checkOut),
-        overtimeHours: computeOvertimeHours(req.body.checkIn, checkOut, schedule),
-        status: deriveStatus({ checkIn: req.body.checkIn, checkOut, schedule }),
+        ...deriveAttendanceFields({ checkIn: req.body.checkIn, checkOut, schedule }),
       },
     });
 
@@ -133,15 +155,16 @@ router.patch(
     if (existing.checkOut) {
       return res.status(409).json({ error: "This record already has a check-out; use the correction route" });
     }
+    if (!checkOutAfterCheckIn(existing.checkIn, req.body.checkOut)) {
+      return res.status(400).json({ error: ORDER_MESSAGE });
+    }
 
     const schedule = await loadScheduleForEmployee(existing.employeeId);
     const record = await prisma.attendance.update({
       where: { id: req.params.id },
       data: {
         checkOut: req.body.checkOut,
-        workedHours: computeWorkedHours(existing.checkIn, req.body.checkOut),
-        overtimeHours: computeOvertimeHours(existing.checkIn, req.body.checkOut, schedule),
-        status: deriveStatus({ checkIn: existing.checkIn, checkOut: req.body.checkOut, schedule }),
+        ...deriveAttendanceFields({ checkIn: existing.checkIn, checkOut: req.body.checkOut, schedule }),
       },
     });
 
@@ -164,6 +187,13 @@ router.patch(
 
     const checkIn = req.body.checkIn ?? existing.checkIn;
     const checkOut = req.body.checkOut !== undefined ? req.body.checkOut : existing.checkOut;
+
+    // The schema could only order the two values the request carried; this is
+    // the merged pair, which is what actually gets stored.
+    if (!checkOutAfterCheckIn(checkIn, checkOut)) {
+      return res.status(400).json({ error: ORDER_MESSAGE });
+    }
+
     const schedule = await loadScheduleForEmployee(existing.employeeId);
 
     const before = {
@@ -171,6 +201,7 @@ router.patch(
       checkOut: existing.checkOut,
       workedHours: existing.workedHours,
       overtimeHours: existing.overtimeHours,
+      dayFraction: existing.dayFraction,
       status: existing.status,
     };
 
@@ -180,9 +211,7 @@ router.patch(
         data: {
           checkIn,
           checkOut,
-          workedHours: computeWorkedHours(checkIn, checkOut),
-          overtimeHours: computeOvertimeHours(checkIn, checkOut, schedule),
-          status: deriveStatus({ checkIn, checkOut, schedule }),
+          ...deriveAttendanceFields({ checkIn, checkOut, schedule }),
           isManualCorrection: true,
         },
       });
@@ -199,6 +228,7 @@ router.patch(
             checkOut: updated.checkOut,
             workedHours: updated.workedHours,
             overtimeHours: updated.overtimeHours,
+            dayFraction: updated.dayFraction,
             status: updated.status,
           },
         },

@@ -88,11 +88,15 @@ async function getKpis({ periodStart, periodEnd, department, employeeType }) {
 
   const attendanceRecords = await prisma.attendance.findMany({
     where: { employee: employeeWhere, checkIn: { gte: periodStart, lte: endOfDay(periodEnd) } },
-    select: { status: true },
+    select: { dayFraction: true },
   });
-  const presentLike = attendanceRecords.filter((a) => a.status === "PRESENT" || a.status === "OVERTIME").length;
+  // Weighted by day fraction rather than counting "present-like" statuses, so
+  // a workforce that half-attended every day reads as 50% healthy instead of
+  // 0% (every record HALF_DAY, none of them PRESENT) — and so this figure
+  // moves in step with what payroll actually pays out.
+  const daysEarned = attendanceRecords.reduce((sum, a) => sum + Number(a.dayFraction), 0);
   const attendanceHealthPercent =
-    attendanceRecords.length > 0 ? Math.round((presentLike / attendanceRecords.length) * 100) : null;
+    attendanceRecords.length > 0 ? Math.round((daysEarned / attendanceRecords.length) * 100) : null;
 
   return {
     totalNetSalaryPaid,
@@ -218,23 +222,36 @@ async function getAttendanceOverview({ periodStart, periodEnd, department, emplo
       employee: buildEmployeeWhere({ department, employeeType }),
       checkIn: { gte: periodStart, lte: endOfDay(periodEnd) },
     },
-    select: { status: true, isManualCorrection: true },
+    select: { status: true, dayFraction: true, isManualCorrection: true },
   });
 
-  const statusCounts = { PRESENT: 0, LATE: 0, ABSENT: 0, OVERTIME: 0, MISSING_CHECKOUT: 0 };
+  // Every AttendanceStatus needs a key here — a missing one would make
+  // statusCounts[r.status] += 1 evaluate to NaN and poison the whole panel.
+  const statusCounts = {
+    PRESENT: 0,
+    HALF_DAY: 0,
+    LATE: 0,
+    ABSENT: 0,
+    OVERTIME: 0,
+    MISSING_CHECKOUT: 0,
+  };
   let manualCorrections = 0;
+  let daysEarned = 0;
   for (const r of records) {
     statusCounts[r.status] += 1;
+    daysEarned += Number(r.dayFraction);
     if (r.isManualCorrection) manualCorrections += 1;
   }
-  const presentLike = statusCounts.PRESENT + statusCounts.OVERTIME;
-  const coveragePercent = records.length > 0 ? Math.round((presentLike / records.length) * 100) : null;
+  // Same day-fraction weighting as attendanceHealthPercent above: a half day
+  // is half of a day's coverage, not zero.
+  const coveragePercent = records.length > 0 ? Math.round((daysEarned / records.length) * 100) : null;
 
   return {
     statusCounts,
     manualCorrections,
     missingCheckouts: statusCounts.MISSING_CHECKOUT,
     coveragePercent,
+    daysEarned: Math.round(daysEarned * 100) / 100,
     totalRecords: records.length,
   };
 }

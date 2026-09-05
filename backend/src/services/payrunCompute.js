@@ -1,7 +1,7 @@
 const { prisma } = require("../lib/prisma");
 const { resolveContractForPeriod } = require("./contractResolution");
 const { computePayslipLines } = require("./ruleEngine");
-const { computeWorkedDays } = require("./workedDays");
+const { computeWorkedDays, countScheduledWorkingDays, computeWorkedRatio } = require("./workedDays");
 
 // Runs inside the BullMQ worker, never inline in a request handler (Section 6
 // of plan.md). For each selected employee: resolve the period contract, and
@@ -32,8 +32,23 @@ async function computePayrun(payrunId, employeeIds, { onProgress } = {}) {
     if (!contract) {
       unresolvedEmployeeIds.push(employeeId);
     } else {
-      const lines = computePayslipLines({ contract, rules });
+      // Proration inputs are gathered before the rule walk, because WAGE is
+      // seeded from them — the payslip is computed *at* the worked ratio
+      // rather than computed whole and scaled afterwards, so every line on it
+      // still adds up to the NET it prints.
+      const employee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        include: { schedule: true },
+      });
       const workedDays = await computeWorkedDays(employeeId, payrun.periodStart, payrun.periodEnd);
+      const periodDays = countScheduledWorkingDays(
+        employee?.schedule ?? null,
+        payrun.periodStart,
+        payrun.periodEnd
+      );
+      const workedRatio = computeWorkedRatio(workedDays, periodDays);
+
+      const lines = computePayslipLines({ contract, rules, workedRatio, workedDays, periodDays });
 
       await prisma.payslip.upsert({
         where: { payrunId_employeeId: { payrunId, employeeId } },

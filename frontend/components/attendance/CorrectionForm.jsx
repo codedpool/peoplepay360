@@ -14,8 +14,14 @@ export default function CorrectionForm({ record, submitting = false, error, onSu
   const [checkIn, setCheckIn] = useState(toLocalInput(record.checkIn));
   const [checkOut, setCheckOut] = useState(toLocalInput(record.checkOut));
 
+  // A check-out before its own check-in gives negative worked time, which
+  // would then flow into the day fraction and into payroll. The API rejects it
+  // too; this stops it being typed.
+  const inverted = Boolean(checkOut) && Boolean(checkIn) && checkOut <= checkIn;
+
   function handleSubmit(e) {
     e.preventDefault();
+    if (inverted) return;
     onSubmit({
       checkIn: checkIn ? new Date(checkIn).toISOString() : undefined,
       checkOut: checkOut ? new Date(checkOut).toISOString() : null,
@@ -42,12 +48,21 @@ export default function CorrectionForm({ record, submitting = false, error, onSu
           <label className="field-label">Check out</label>
           <input
             type="datetime-local"
+            min={checkIn || undefined}
             className="field num"
             value={checkOut}
             onChange={(e) => setCheckOut(e.target.value)}
           />
+          {inverted && (
+            <p className="text-[0.75rem] text-stamp mt-1">Check-out must be after check-in.</p>
+          )}
         </div>
       </div>
+
+      <p className="text-[0.75rem] text-fade -mt-1">
+        Worked hours, overtime, the day fraction and the status are all recalculated from these two
+        timestamps — they can&apos;t be set directly.
+      </p>
 
       <ErrorNote>{error}</ErrorNote>
 
@@ -57,7 +72,7 @@ export default function CorrectionForm({ record, submitting = false, error, onSu
             Cancel
           </button>
         )}
-        <button type="submit" disabled={submitting} className="btn-primary">
+        <button type="submit" disabled={submitting || inverted} className="btn-primary">
           {submitting ? "Saving…" : "Save correction"}
         </button>
       </div>

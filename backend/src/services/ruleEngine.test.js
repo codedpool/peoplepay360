@@ -61,3 +61,89 @@ describe("computePayslipLines", () => {
     expect(() => computePayslipLines({ contract: null, rules: STANDARD_RULES })).toThrow(/resolved contract/);
   });
 });
+
+describe("computePayslipLines attendance proration", () => {
+  it("defaults to a full month when no ratio is supplied", () => {
+    const lines = computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES });
+    expect(lines.find((l) => l.code === "BASIC").amount).toBe(60000);
+  });
+
+  // The point of seeding WAGE already-scaled rather than scaling NET at the
+  // end: every line is prorated, so the lines still add up to the NET printed
+  // on the payslip.
+  it("prorates every line, and the lines still reconcile to NET", () => {
+    const lines = computePayslipLines({
+      contract: { wage: 60000 },
+      rules: STANDARD_RULES,
+      workedRatio: 0.5,
+    });
+    const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
+
+    expect(byCode.BASIC).toBe(30000);
+    expect(byCode.HRA).toBe(3000);
+    expect(byCode.GROSS).toBe(33000);
+    expect(byCode.TAX).toBe(3300);
+    expect(byCode.NET).toBe(29700);
+    expect(byCode.GROSS - byCode.TAX).toBe(byCode.NET);
+    expect(byCode.BASIC + byCode.HRA).toBe(byCode.GROSS);
+  });
+
+  it("pays two days out of twenty-two as two days, not a whole month", () => {
+    const lines = computePayslipLines({
+      contract: { wage: 44000 },
+      rules: STANDARD_RULES,
+      workedRatio: 2 / 22,
+      workedDays: 2,
+      periodDays: 22,
+    });
+    expect(lines.find((l) => l.code === "BASIC").amount).toBeCloseTo(4000, 6);
+  });
+
+  it("pays nothing for a month with no attendance", () => {
+    const lines = computePayslipLines({
+      contract: { wage: 60000 },
+      rules: STANDARD_RULES,
+      workedRatio: 0,
+    });
+    expect(lines.every((l) => l.amount === 0)).toBe(true);
+  });
+
+  it("exposes the proration inputs as formula variables a rule can read", () => {
+    const rules = [
+      { id: "r1", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" },
+      // A fixed monthly premium that shouldn't shrink with attendance.
+      { id: "r2", code: "INSURANCE", category: "DEDUCTION", sequence: 2, computationMethod: "FORMULA", formulaOrValue: "0.01 * FULL_WAGE" },
+      { id: "r3", code: "DAYS", category: "ALLOWANCE", sequence: 3, computationMethod: "FORMULA", formulaOrValue: "WORKED_DAYS * 100" },
+    ];
+    const lines = computePayslipLines({
+      contract: { wage: 60000 },
+      rules,
+      workedRatio: 0.5,
+      workedDays: 11,
+      periodDays: 22,
+    });
+    const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
+
+    expect(byCode.BASIC).toBe(30000); // prorated
+    expect(byCode.INSURANCE).toBe(600); // 1% of the *contractual* wage
+    expect(byCode.DAYS).toBe(1100);
+  });
+
+  it("rejects a ratio outside 0..1 instead of paying more than a full month", () => {
+    expect(() =>
+      computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES, workedRatio: 1.5 })
+    ).toThrow(/between 0 and 1/);
+    expect(() =>
+      computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES, workedRatio: -0.2 })
+    ).toThrow(/between 0 and 1/);
+  });
+
+  it("refuses a rule coded as one of the reserved context variables", () => {
+    const clashing = [
+      { id: "r1", code: "WORKED_RATIO", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "1" },
+    ];
+    expect(() => computePayslipLines({ contract: { wage: 1000 }, rules: clashing })).toThrow(
+      /reserved/
+    );
+  });
+});

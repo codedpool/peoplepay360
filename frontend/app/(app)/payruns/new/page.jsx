@@ -29,6 +29,10 @@ export default function NewPayrunPage() {
   const [statusMessage, setStatusMessage] = useState(null);
   const [error, setError] = useState(null);
 
+  // A backwards period computes zero scheduled working days, which would
+  // prorate every payslip in the run to nothing. Blocked here and server-side.
+  const periodInverted = Boolean(periodStart) && Boolean(periodEnd) && periodEnd < periodStart;
+
   useEffect(() => {
     api
       .get("/api/salary-structures?pageSize=100&active=true")
@@ -38,6 +42,7 @@ export default function NewPayrunPage() {
 
   function handleContinue(e) {
     e.preventDefault();
+    if (periodInverted) return;
     setStep(2);
   }
 
@@ -106,18 +111,30 @@ export default function NewPayrunPage() {
               <input
                 type="date"
                 required
+                min={periodStart || undefined}
                 className="field num"
                 value={periodEnd}
                 onChange={(e) => setPeriodEnd(e.target.value)}
               />
+              {periodInverted && (
+                <p className="text-[0.75rem] text-stamp mt-1">
+                  Period end can&apos;t be before the period start.
+                </p>
+              )}
             </div>
           </div>
+          {/* Worth saying up front: payslips are prorated against attendance
+              within this window, so the period is now what decides how much
+              of the month each employee is actually paid for. */}
+          <p className="text-[0.78rem] text-fade -mt-1">
+            Each payslip is prorated against the days the employee actually attended within this period.
+          </p>
           <ErrorNote>{error}</ErrorNote>
           <div className="flex justify-end gap-3">
             <button type="button" className="btn-secondary" onClick={() => router.push("/payruns")}>
               Discard
             </button>
-            <button type="submit" className="btn-primary">
+            <button type="submit" disabled={periodInverted} className="btn-primary">
               Continue
             </button>
           </div>

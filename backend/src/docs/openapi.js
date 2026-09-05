@@ -155,7 +155,15 @@ const openapiSpec = {
           checkOut: { type: "string", format: "date-time", nullable: true },
           workedHours: { type: "string", nullable: true, description: "Computed, never accepted as input" },
           overtimeHours: { type: "string", description: "Computed, never accepted as input" },
-          status: { type: "string", enum: ["PRESENT", "LATE", "ABSENT", "OVERTIME", "MISSING_CHECKOUT"] },
+          dayFraction: {
+            type: "string",
+            description:
+              "Day-equivalents earned: 1 full, 0.5 half, 0 below the half-day bar. Computed, never accepted as input; this is what payroll prorates against.",
+          },
+          status: {
+            type: "string",
+            enum: ["PRESENT", "HALF_DAY", "LATE", "ABSENT", "OVERTIME", "MISSING_CHECKOUT"],
+          },
           isManualCorrection: { type: "boolean" },
         },
       },

@@ -1,5 +1,10 @@
 const { evaluateFormula } = require("./formulaEvaluator");
 
+// Variable names the payroll context seeds before any rule runs. A salary rule
+// may *read* these but must not be coded as one, or it would overwrite the
+// input its own siblings are reading from mid-walk.
+const RESERVED_CODES = new Set(["WAGE", "FULL_WAGE", "WORKED_RATIO", "WORKED_DAYS", "PERIOD_DAYS"]);
+
 // Golden Rule #2: rules execute in `sequence` order and each rule's computed
 // amount is written into a running context that later rules read from — Net
 // isn't a stored formula, it's whatever the context holds once the ordered
@@ -9,13 +14,36 @@ const { evaluateFormula } = require("./formulaEvaluator");
 // Pure and stateless: no shared mutable state is read or written outside the
 // arguments/return value, so it can run inside a BullMQ worker (Phase 5)
 // without any cross-employee interference inside a batch.
-function computePayslipLines({ contract, rules }) {
+//
+// Attendance proration enters here, and only here: WAGE is seeded as the
+// contract wage *already scaled* by the period's worked ratio, so an employee
+// present two days out of twenty-two is paid two days' worth. Every rule in
+// the structure derives from WAGE (BASIC is a share of it, allowances a share
+// of BASIC, deductions a share of GROSS, NET the running result), so a single
+// scaled seed prorates the entire payslip and every line still sums to the
+// NET printed on it — no rule has to know proration exists.
+//
+// workedRatio defaults to 1 so a caller that hasn't measured attendance gets
+// the old full-month behaviour rather than a silently zeroed payslip.
+function computePayslipLines({ contract, rules, workedRatio = 1, workedDays = null, periodDays = null }) {
   if (!contract) {
     throw new Error("computePayslipLines requires a resolved contract");
   }
+  if (!Number.isFinite(workedRatio) || workedRatio < 0 || workedRatio > 1) {
+    throw new Error(`workedRatio must be a number between 0 and 1, got ${workedRatio}`);
+  }
 
   const orderedRules = [...rules].sort((a, b) => a.sequence - b.sequence);
-  const context = { WAGE: Number(contract.wage) };
+  const context = {
+    WAGE: Number(contract.wage) * workedRatio,
+    // The unprorated figure, for a structure that needs the contractual wage
+    // regardless of attendance (a fixed stipend, a per-month insurance
+    // premium). Rules opt into it explicitly; WAGE stays the prorated default.
+    FULL_WAGE: Number(contract.wage),
+    WORKED_RATIO: workedRatio,
+    WORKED_DAYS: workedDays ?? 0,
+    PERIOD_DAYS: periodDays ?? 0,
+  };
   const lines = [];
 
   for (const rule of orderedRules) {
@@ -29,6 +57,13 @@ function computePayslipLines({ contract, rules }) {
     // structure can reference — this is what makes NET = GROSS - TAX work as
     // a formula rather than a hardcoded calculation.
     if (Object.prototype.hasOwnProperty.call(context, rule.code)) {
+      // Same collision check either way, but the two causes need different
+      // fixes: rename your duplicate, versus rename off a reserved name.
+      if (RESERVED_CODES.has(rule.code)) {
+        throw new Error(
+          `Rule code "${rule.code}" is reserved by the payroll context — pick a different code`
+        );
+      }
       throw new Error(`Duplicate rule code "${rule.code}" in structure — codes must be unique per structure`);
     }
     context[rule.code] = amount;
@@ -56,4 +91,4 @@ function computeRuleAmount(rule, context) {
   }
 }
 
-module.exports = { computePayslipLines };
+module.exports = { computePayslipLines, RESERVED_CODES };
