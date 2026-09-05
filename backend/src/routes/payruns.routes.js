@@ -7,7 +7,7 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { makeLimiter } = require("../middleware/rateLimiters");
-const { payrunComputeQueue } = require("../lib/queue");
+const { payrunComputeQueue, payslipEmailQueue } = require("../lib/queue");
 const { validatePayrun } = require("../services/payrunValidation");
 
 const router = express.Router();
@@ -193,6 +193,48 @@ router.post(
     });
 
     res.json({ payrunId: payrun.id, status: "PAID" });
+  })
+);
+
+// Bulk "Send Payslips" (Stage 5.3) — enqueues one payslip-email job per
+// payslip rather than looping and sending inline, so a batch of hundreds
+// doesn't block this request or let one bad address stall the rest.
+router.post(
+  "/:id/send-payslips",
+  requireAuth,
+  requirePermission("payrun:write"),
+  asyncHandler(async (req, res) => {
+    const payrun = await prisma.payrun.findUnique({
+      where: { id: req.params.id },
+      include: { payslips: true },
+    });
+    if (!payrun) return res.status(404).json({ error: "Payrun not found" });
+    if (payrun.status !== "PAID") {
+      return res.status(409).json({ error: "Only a paid Payrun's payslips can be sent" });
+    }
+
+    const jobs = await Promise.all(
+      payrun.payslips.map((payslip) =>
+        payslipEmailQueue.add("send", { payslipId: payslip.id, actorUserId: req.user.id })
+      )
+    );
+
+    await prisma.$transaction(async (tx) => {
+      await tx.payrun.update({ where: { id: payrun.id }, data: { status: "SENT" } });
+      await tx.payslip.updateMany({ where: { payrunId: payrun.id }, data: { status: "SENT" } });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user.id,
+          action: "payrun.send_payslips",
+          entityType: "Payrun",
+          entityId: payrun.id,
+          before: { status: "PAID" },
+          after: { status: "SENT", jobCount: jobs.length },
+        },
+      });
+    });
+
+    res.status(202).json({ payrunId: payrun.id, status: "SENT", jobIds: jobs.map((j) => j.id) });
   })
 );
 

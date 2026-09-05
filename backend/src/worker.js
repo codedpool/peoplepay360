@@ -3,5 +3,7 @@
 // compute, PDF generation and bulk email all be slow without ever blocking a
 // request thread (Section 6 of plan.md).
 require("./workers/payrunCompute.worker");
+require("./workers/payslipPdf.worker");
+require("./workers/payslipEmail.worker");
 
-console.log("peoplepay360 worker process started (payrun-compute)");
+console.log("peoplepay360 worker process started (payrun-compute, payslip-pdf, payslip-email)");

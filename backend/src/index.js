@@ -18,6 +18,7 @@ const userRoutes = require("./routes/users.routes");
 const salaryStructureRoutes = require("./routes/salaryStructures.routes");
 const salaryRuleRoutes = require("./routes/salaryRules.routes");
 const payrunRoutes = require("./routes/payruns.routes");
+const payslipRoutes = require("./routes/payslips.routes");
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/salary-structures", salaryStructureRoutes);
 app.use("/api/salary-structures/:structureId/rules", salaryRuleRoutes);
 app.use("/api/payruns", payrunRoutes);
+app.use("/api/payslips", payslipRoutes);
 
 // Centralized error handler — catches anything asyncHandler forwards via next(err)
 // so an unexpected failure returns a clean 500 instead of crashing the process.
