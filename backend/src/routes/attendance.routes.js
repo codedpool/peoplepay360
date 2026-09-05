@@ -7,7 +7,7 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
-const { computeWorkedHours, deriveStatus } = require("../services/attendance");
+const { computeWorkedHours, computeOvertimeHours, deriveStatus } = require("../services/attendance");
 
 const router = express.Router();
 
@@ -103,6 +103,7 @@ router.post(
         checkIn: req.body.checkIn,
         checkOut,
         workedHours: computeWorkedHours(req.body.checkIn, checkOut),
+        overtimeHours: computeOvertimeHours(req.body.checkIn, checkOut, schedule),
         status: deriveStatus({ checkIn: req.body.checkIn, checkOut, schedule }),
       },
     });
@@ -137,6 +138,7 @@ router.patch(
       data: {
         checkOut: req.body.checkOut,
         workedHours: computeWorkedHours(existing.checkIn, req.body.checkOut),
+        overtimeHours: computeOvertimeHours(existing.checkIn, req.body.checkOut, schedule),
         status: deriveStatus({ checkIn: existing.checkIn, checkOut: req.body.checkOut, schedule }),
       },
     });
@@ -165,6 +167,7 @@ router.patch(
       checkIn: existing.checkIn,
       checkOut: existing.checkOut,
       workedHours: existing.workedHours,
+      overtimeHours: existing.overtimeHours,
       status: existing.status,
     };
 
@@ -175,6 +178,7 @@ router.patch(
           checkIn,
           checkOut,
           workedHours: computeWorkedHours(checkIn, checkOut),
+          overtimeHours: computeOvertimeHours(checkIn, checkOut, schedule),
           status: deriveStatus({ checkIn, checkOut, schedule }),
           isManualCorrection: true,
         },
@@ -191,6 +195,7 @@ router.patch(
             checkIn: updated.checkIn,
             checkOut: updated.checkOut,
             workedHours: updated.workedHours,
+            overtimeHours: updated.overtimeHours,
             status: updated.status,
           },
         },

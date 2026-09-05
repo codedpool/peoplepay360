@@ -18,6 +18,30 @@ function scheduledStartMinutes(schedule, checkIn) {
   return entry ? timeToMinutes(entry.start) : null;
 }
 
+// Scheduled daily minutes derived the same way deriveStatus() derives its
+// OVERTIME threshold below — kept as one shared calculation so the numeric
+// overtimeHours figure and the OVERTIME status label can never disagree.
+function scheduledDailyMinutes(schedule) {
+  if (!schedule) return null;
+  return (Number(schedule.weeklyHours) / 5) * 60;
+}
+
+// Mockup's Attendance form shows Overtime as its own numeric field alongside
+// Worked Hours, not just the OVERTIME status label — derived here from worked
+// time beyond the schedule's daily allocation (post grace period), never
+// accepted as client input. No schedule, or no checkout yet: 0, not a guess.
+function computeOvertimeHours(checkIn, checkOut, schedule) {
+  if (!checkOut) return 0;
+  const dailyMinutes = scheduledDailyMinutes(schedule);
+  if (dailyMinutes === null) return 0;
+
+  const workedMinutes = (checkOut.getTime() - checkIn.getTime()) / 60000;
+  const overtimeMinutes = workedMinutes - (dailyMinutes + OVERTIME_GRACE_MINUTES);
+  if (overtimeMinutes <= 0) return 0;
+
+  return Math.round((overtimeMinutes / 60) * 100) / 100;
+}
+
 // Status is compared against the employee's assigned schedule for that weekday,
 // not a hardcoded shift — an employee with no matching pattern entry is treated
 // as off-schedule (Present/Overtime only, never Late) rather than guessed at.
@@ -25,7 +49,7 @@ function deriveStatus({ checkIn, checkOut, schedule }) {
   if (!checkOut) return "MISSING_CHECKOUT";
 
   const workedMinutes = (checkOut.getTime() - checkIn.getTime()) / 60000;
-  const scheduledWeeklyHours = schedule ? Number(schedule.weeklyHours) : null;
+  const dailyMinutes = scheduledDailyMinutes(schedule);
   const scheduledStart = scheduledStartMinutes(schedule, checkIn);
 
   if (scheduledStart !== null) {
@@ -35,14 +59,11 @@ function deriveStatus({ checkIn, checkOut, schedule }) {
     }
   }
 
-  if (scheduledWeeklyHours !== null) {
-    const scheduledDailyMinutes = (scheduledWeeklyHours / 5) * 60;
-    if (workedMinutes > scheduledDailyMinutes + OVERTIME_GRACE_MINUTES) {
-      return "OVERTIME";
-    }
+  if (dailyMinutes !== null && workedMinutes > dailyMinutes + OVERTIME_GRACE_MINUTES) {
+    return "OVERTIME";
   }
 
   return "PRESENT";
 }
 
-module.exports = { computeWorkedHours, deriveStatus };
+module.exports = { computeWorkedHours, computeOvertimeHours, deriveStatus };

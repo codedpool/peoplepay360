@@ -204,6 +204,7 @@ model Attendance {
   checkIn           DateTime          @map("check_in")
   checkOut          DateTime?         @map("check_out")
   workedHours       Decimal?          @map("worked_hours") @db.Decimal(5, 2)
+  overtimeHours     Decimal           @default(0) @map("overtime_hours") @db.Decimal(5, 2)
   status            AttendanceStatus
   isManualCorrection Boolean          @default(false) @map("is_manual_correction")
   createdAt         DateTime          @default(now()) @map("created_at")
