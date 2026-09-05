@@ -25,7 +25,7 @@ export default function SalaryStructuresPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await api.get("/api/salary-structures?pageSize=100");
+      const res = await api.get("/api/salary-structures?pageSize=500");
       setStructures(res.data);
     } catch (err) {
       setLoadError(err.message);

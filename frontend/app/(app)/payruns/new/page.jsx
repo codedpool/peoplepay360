@@ -35,7 +35,7 @@ export default function NewPayrunPage() {
 
   useEffect(() => {
     api
-      .get("/api/salary-structures?pageSize=100&active=true")
+      .get("/api/salary-structures?pageSize=500&active=true")
       .then((res) => setStructures(res.data))
       .catch((err) => setError(err.message));
   }, []);

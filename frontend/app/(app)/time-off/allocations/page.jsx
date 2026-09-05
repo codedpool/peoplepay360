@@ -45,7 +45,7 @@ export default function AllocationsPage() {
       if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
       const [allocRes, employeesRes, typesRes] = await Promise.all([
         api.get(`/api/timeoff-allocations?${params}`),
-        api.get("/api/employees?pageSize=100"),
+        api.get("/api/employees?pageSize=500"),
         api.get("/api/timeoff-types"),
       ]);
       setAllocations(allocRes.data);

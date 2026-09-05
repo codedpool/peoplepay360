@@ -23,7 +23,7 @@ export default function SchedulesPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await api.get("/api/schedules?pageSize=100");
+      const res = await api.get("/api/schedules?pageSize=500");
       setSchedules(res.data);
     } catch (err) {
       setLoadError(err.message);

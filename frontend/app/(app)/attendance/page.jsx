@@ -87,7 +87,7 @@ export default function AttendancePage() {
         if (statusFilter) params.set("status", statusFilter);
         if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
         requests.push(api.get(`/api/attendance?${params}`));
-        requests.push(api.get("/api/employees?pageSize=100"));
+        requests.push(api.get("/api/employees?pageSize=500"));
       } else {
         requests.push(Promise.resolve({ data: [] }));
         requests.push(Promise.resolve({ data: [] }));
