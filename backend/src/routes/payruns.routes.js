@@ -55,6 +55,68 @@ router.get(
   })
 );
 
+// Stage 5.1's original "Step 2: eligible employee selection" — the wizard's
+// missing piece flagged after Phase 5's initial build. Mirrors
+// resolveContractForPeriod's exact where-clause but as a Contract-level list
+// query joined to Employee, so pagination reflects only employees who
+// actually resolve a contract for the period, not "all employees minus some
+// filtered out after the fact". Registered before `/:id` so Express doesn't
+// swallow this path as an :id param.
+router.get(
+  "/eligible-employees",
+  requireAuth,
+  requirePermission("payrun:write"),
+  asyncHandler(async (req, res) => {
+    const parsed = z
+      .object({
+        periodStart: dateSchema,
+        periodEnd: dateSchema,
+        search: z.string().min(1).optional(),
+      })
+      .safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Validation failed", issues: parsed.error.issues });
+    }
+    const { periodStart, periodEnd, search } = parsed.data;
+
+    const { page, pageSize, skip, take } = parsePagination(req.query);
+    const where = {
+      status: "ACTIVE",
+      startDate: { lte: periodStart },
+      OR: [{ endDate: null }, { endDate: { gte: periodEnd } }],
+    };
+    if (search) {
+      where.employee = { name: { contains: search, mode: "insensitive" } };
+    }
+
+    const [contracts, total] = await Promise.all([
+      prisma.contract.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { employee: { name: "asc" } },
+        include: { employee: { include: { schedule: true } } },
+      }),
+      prisma.contract.count({ where }),
+    ]);
+
+    // One row per employee, not per contract — the exclusion constraint (Golden
+    // Rule #1) guarantees at most one ACTIVE contract can overlap any given
+    // period per employee, so this list is naturally deduplicated already.
+    const data = contracts.map((contract) => ({
+      employeeId: contract.employee.id,
+      name: contract.employee.name,
+      department: contract.employee.department,
+      weeklyHours: contract.employee.schedule ? Number(contract.employee.schedule.weeklyHours) : null,
+      contractId: contract.id,
+      startDate: contract.startDate,
+      wage: contract.wage,
+    }));
+
+    res.json(paginatedResponse(data, total, page, pageSize));
+  })
+);
+
 router.get(
   "/:id",
   requireAuth,
