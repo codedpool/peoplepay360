@@ -30,8 +30,24 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
   const requestedAmount = Number(duration) || 0;
   const insufficientBalance = remaining !== null && requestedAmount > 0 && requestedAmount > remaining;
 
+  const datesInverted = Boolean(startDate) && Boolean(endDate) && endDate < startDate;
+
+  // Calendar days the range covers, inclusive of both ends. The API caps
+  // duration against this — a two-day range can't burn thirty days of balance
+  // — so the same ceiling is shown here rather than letting the submit fail.
+  const spanDays =
+    startDate && endDate && !datesInverted
+      ? Math.round((new Date(endDate) - new Date(startDate)) / 86_400_000) + 1
+      : null;
+  const durationCeiling =
+    spanDays === null ? null : selectedType?.unit === "HOURS" ? spanDays * 24 : spanDays;
+  const durationTooLong = durationCeiling !== null && requestedAmount > durationCeiling;
+
+  const canSubmit = !datesInverted && !durationTooLong;
+
   function handleSubmit(e) {
     e.preventDefault();
+    if (!canSubmit) return;
     onSubmit({ timeOffTypeId, startDate, endDate, duration: requestedAmount });
   }
 
@@ -68,7 +84,17 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
         </div>
         <div className="field-group">
           <label className="field-label">End date</label>
-          <input type="date" required className="field num" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <input
+            type="date"
+            required
+            min={startDate || undefined}
+            className="field num"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          {datesInverted && (
+            <p className="text-[0.75rem] text-stamp mt-1">End date can&apos;t be before the start date.</p>
+          )}
         </div>
       </div>
       <div className="field-group">
@@ -77,11 +103,24 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
           type="number"
           min="0"
           step="0.5"
+          max={durationCeiling ?? undefined}
           required
           className="field num"
           value={duration}
           onChange={(e) => setDuration(e.target.value)}
         />
+        {durationTooLong ? (
+          <p className="text-[0.75rem] text-stamp mt-1">
+            Those dates cover {durationCeiling} {selectedType?.unit?.toLowerCase() ?? "days"} — a request
+            can&apos;t claim more than that.
+          </p>
+        ) : (
+          durationCeiling !== null && (
+            <p className="text-[0.75rem] text-fade mt-1">
+              Those dates cover {durationCeiling} {selectedType?.unit?.toLowerCase() ?? "days"}.
+            </p>
+          )
+        )}
       </div>
 
       {insufficientBalance && (
@@ -117,7 +156,7 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
             Cancel
           </button>
         )}
-        <button type="submit" disabled={submitting} className="btn-primary">
+        <button type="submit" disabled={submitting || !canSubmit} className="btn-primary">
           {submitting ? "Submitting…" : "Submit request"}
         </button>
       </div>
