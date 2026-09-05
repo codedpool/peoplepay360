@@ -3,6 +3,11 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const { deriveAttendanceFields } = require("../src/services/attendance");
 const { computePayslipLines } = require("../src/services/ruleEngine");
+const {
+  computeWorkedDays,
+  countScheduledWorkingDays,
+  computeWorkedRatio,
+} = require("../src/services/workedDays");
 
 const prisma = new PrismaClient();
 
@@ -52,12 +57,17 @@ const DEPARTMENTS = [
 ];
 
 // Wage bands per position keep the salary-cost-by-department chart believable
-// instead of every employee earning a random number. Figures are annual INR.
+// instead of every employee earning a random number.
+//
+// These are MONTHLY figures, because Contract.wage is a monthly wage — the
+// form labels it "Wage / month" and the rule engine pays it out once per
+// payrun month. Seeding annual figures here (as this once did) paid every
+// employee their whole year's salary every month and inflated payroll ~12x.
 function wageFor(position) {
-  if (/Manager|Lead/.test(position)) return randInt(950000, 1450000);
-  if (/Senior/.test(position)) return randInt(800000, 1100000);
-  if (/Analyst|Specialist|Strategist|Engineer|Accountant/.test(position)) return randInt(550000, 850000);
-  return randInt(350000, 600000);
+  if (/Manager|Lead/.test(position)) return randInt(80000, 120000);
+  if (/Senior/.test(position)) return randInt(65000, 92000);
+  if (/Analyst|Specialist|Strategist|Engineer|Accountant/.test(position)) return randInt(45000, 70000);
+  return randInt(28000, 50000);
 }
 
 function addDays(d, n) {
@@ -69,6 +79,27 @@ function isWeekend(d) {
   const g = d.getUTCDay();
   return g === 0 || g === 6;
 }
+
+// Everything dated in this seed is anchored to the day it runs, never to a
+// fixed calendar date. A hardcoded 2026 window drifts out from under the app:
+// attendance and payroll end up in different months, and the dashboard's
+// current period reads as empty even though the database is full.
+const TODAY = new Date();
+const THIS_MONTH = new Date(Date.UTC(TODAY.getUTCFullYear(), TODAY.getUTCMonth(), 1));
+
+// offset 0 = the month the seed runs in, -1 = last month, and so on.
+function monthStart(offset) {
+  return new Date(Date.UTC(THIS_MONTH.getUTCFullYear(), THIS_MONTH.getUTCMonth() + offset, 1));
+}
+function monthEnd(offset) {
+  return new Date(Date.UTC(THIS_MONTH.getUTCFullYear(), THIS_MONTH.getUTCMonth() + offset + 1, 0));
+}
+function monthName(offset) {
+  return monthStart(offset).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+// How many payroll months of history the demo carries. Attendance is seeded
+// across exactly this same window so every period has both.
+const HISTORY_MONTHS = 3;
 
 async function main() {
   console.log("Clearing existing data…");
@@ -227,8 +258,8 @@ async function main() {
       await prisma.contract.create({
         data: {
           employeeId: e.id,
-          startDate: new Date(Date.UTC(2023, randInt(0, 5), 1)),
-          endDate: new Date(Date.UTC(2024, 11, 31)),
+          startDate: monthStart(-42 + randInt(0, 5)),
+          endDate: monthEnd(-22),
           wage: Math.round(wage * 0.88),
           salaryStructureId: structure.id,
           status: "EXPIRED",
@@ -241,8 +272,8 @@ async function main() {
       contracts.push(
         await prisma.contract.create({
           data: {
-            employeeId: e.id, startDate: new Date(Date.UTC(2025, 0, 1)),
-            endDate: new Date(Date.UTC(2026, randInt(0, 5), 28)),
+            employeeId: e.id, startDate: monthStart(-20),
+            endDate: monthEnd(-randInt(4, 9)),
             wage, salaryStructureId: structure.id, status: "EXPIRED",
           },
         })
@@ -250,10 +281,15 @@ async function main() {
       continue;
     }
 
+    // A few live contracts run out in the next couple of months, which is what
+    // the dashboard's "contracts expiring" alert and the payrun warnings read.
+    const expiresSoon = rand() < 0.05;
     contracts.push(
       await prisma.contract.create({
         data: {
-          employeeId: e.id, startDate: new Date(Date.UTC(2025, 0, 1)), endDate: null,
+          employeeId: e.id,
+          startDate: monthStart(-20),
+          endDate: expiresSoon ? monthEnd(randInt(0, 1)) : null,
           wage, salaryStructureId: structure.id, status: "ACTIVE",
         },
       })
@@ -265,7 +301,7 @@ async function main() {
   for (const e of employees.slice(0, 6)) {
     await prisma.contract.create({
       data: {
-        employeeId: e.id, startDate: new Date(Date.UTC(2027, 0, 1)), endDate: null,
+        employeeId: e.id, startDate: monthStart(4), endDate: null,
         wage: wageFor(e.jobPosition), salaryStructureId: standard.id, status: "DRAFT",
       },
     });
@@ -273,7 +309,7 @@ async function main() {
   for (const e of employees.slice(6, 11)) {
     await prisma.contract.create({
       data: {
-        employeeId: e.id, startDate: new Date(Date.UTC(2024, 6, 1)), endDate: new Date(Date.UTC(2024, 8, 30)),
+        employeeId: e.id, startDate: monthStart(-26), endDate: monthEnd(-24),
         wage: wageFor(e.jobPosition), salaryStructureId: standard.id, status: "CANCELLED",
       },
     });
@@ -300,8 +336,8 @@ async function main() {
   });
   const allocTypes = [casual, sick, earned, comp];
 
-  const YEAR_START = new Date(Date.UTC(2026, 0, 1));
-  const YEAR_END = new Date(Date.UTC(2026, 11, 31));
+  const YEAR_START = new Date(Date.UTC(TODAY.getUTCFullYear(), 0, 1));
+  const YEAR_END = new Date(Date.UTC(TODAY.getUTCFullYear(), 11, 31));
   const activeEmployees = employees.filter((e) => e.status === "ACTIVE");
 
   const allocations = [];
@@ -340,7 +376,9 @@ async function main() {
       );
       if (!useLwp && !activeAlloc) continue;
 
-      const start = new Date(Date.UTC(2026, randInt(0, 8), randInt(1, 26)));
+      // Spread across the year so far, ending near today rather than at a
+      // fixed month.
+      const start = new Date(Date.UTC(TODAY.getUTCFullYear(), randInt(0, TODAY.getUTCMonth()), randInt(1, 26)));
       const span = randInt(0, 3);
       const end = addDays(start, span);
       const duration = type.unit === "HOURS" ? (span + 1) * 8 : span + 1;
@@ -362,7 +400,7 @@ async function main() {
           allocationId: approvedAgainst ? approvedAgainst.id : null,
           cancellationRequested: wantsCancel,
           cancellationReason: wantsCancel ? "Plans changed — I no longer need these days off." : null,
-          cancellationRequestedAt: wantsCancel ? new Date(Date.UTC(2026, 8, 1)) : null,
+          cancellationRequestedAt: wantsCancel ? addDays(TODAY, -randInt(1, 10)) : null,
         },
       });
     }
@@ -375,9 +413,12 @@ async function main() {
   // full/half/absent bands the app applies to a live check-in.
   const attendanceRows = [];
   const scheduleById = Object.fromEntries(scheduleList.map((s) => [s.id, s]));
-  const firstDay = new Date(Date.UTC(2026, 7, 24));
-  for (let d = 0; d < 14; d++) {
-    const current = addDays(firstDay, d);
+  // Covers every payroll month below plus the current month to date, so a
+  // payslip's worked days come from real attendance and the dashboard shows
+  // attendance and payroll for the same period.
+  const firstDay = monthStart(-HISTORY_MONTHS);
+  const lastDay = new Date(Date.UTC(TODAY.getUTCFullYear(), TODAY.getUTCMonth(), TODAY.getUTCDate()));
+  for (let current = firstDay; current <= lastDay; current = addDays(current, 1)) {
     if (isWeekend(current)) continue;
     for (const e of activeEmployees) {
       if (rand() < 0.06) continue; // no record at all — on leave or holiday
@@ -428,13 +469,17 @@ async function main() {
   console.log("Seeding payruns and payslips…");
   // Three historical months, each fully computed through the real rule engine
   // so every payslip's lines agree with what a recompute would produce.
+  // The three months before the current one, oldest first: fully sent, paid,
+  // and computed-but-not-yet-paid, so the payrun list shows a realistic
+  // lifecycle ending at a month that still needs work.
   const periods = [
-    { name: "May 2026 Payroll", start: new Date(Date.UTC(2026, 4, 1)), end: new Date(Date.UTC(2026, 4, 31)), status: "SENT" },
-    { name: "June 2026 Payroll", start: new Date(Date.UTC(2026, 5, 1)), end: new Date(Date.UTC(2026, 5, 30)), status: "PAID" },
-    { name: "July 2026 Payroll", start: new Date(Date.UTC(2026, 6, 1)), end: new Date(Date.UTC(2026, 6, 31)), status: "COMPUTED" },
+    { name: `${monthName(-3)} Payroll`, start: monthStart(-3), end: monthEnd(-3), status: "SENT" },
+    { name: `${monthName(-2)} Payroll`, start: monthStart(-2), end: monthEnd(-2), status: "PAID" },
+    { name: `${monthName(-1)} Payroll`, start: monthStart(-1), end: monthEnd(-1), status: "COMPUTED" },
   ];
 
   const structuresById = { [standard.id]: standard, [executive.id]: executive };
+  const employeeById = Object.fromEntries(employees.map((e) => [e.id, e]));
   for (const p of periods) {
     const payrun = await prisma.payrun.create({
       data: { name: p.name, salaryStructureId: standard.id, periodStart: p.start, periodEnd: p.end, status: p.status },
@@ -445,7 +490,23 @@ async function main() {
       const structure = structuresById[contract.salaryStructureId];
       if (!structure) continue;
 
-      const lines = computePayslipLines({ contract, rules: structure.rules });
+      // Worked days and the proration factor are read back out of the
+      // attendance seeded above using the same services the payrun compute
+      // job runs, rather than being invented here — so a seeded payslip is
+      // byte-for-byte what recomputing that payrun would produce.
+      const employee = employeeById[contract.employeeId];
+      const schedule = employee ? scheduleById[employee.scheduleId] : null;
+      const workedDays = await computeWorkedDays(contract.employeeId, p.start, p.end);
+      const periodDays = countScheduledWorkingDays(schedule, p.start, p.end);
+      const workedRatio = computeWorkedRatio(workedDays, periodDays);
+
+      const lines = computePayslipLines({
+        contract,
+        rules: structure.rules,
+        workedRatio,
+        workedDays,
+        periodDays,
+      });
       // Payslip status tracks its parent payrun: a SENT payrun's payslips are
       // SENT, which is what the payslip list's status column reflects.
       const payslipStatus = p.status === "SENT" ? "SENT" : p.status === "PAID" ? "PAID" : "COMPUTED";
@@ -453,7 +514,7 @@ async function main() {
       await prisma.payslip.create({
         data: {
           payrunId: payrun.id, employeeId: contract.employeeId, contractId: contract.id,
-          status: payslipStatus, workedDays: randInt(20, 23),
+          status: payslipStatus, workedDays,
           lines: { create: lines.map((l) => ({ salaryRuleId: l.salaryRuleId, amount: l.amount })) },
         },
       });
@@ -463,8 +524,8 @@ async function main() {
   // Compute -> Validate -> Mark Paid -> Send walkthrough.
   await prisma.payrun.create({
     data: {
-      name: "August 2026 Payroll", salaryStructureId: standard.id,
-      periodStart: new Date(Date.UTC(2026, 7, 1)), periodEnd: new Date(Date.UTC(2026, 7, 31)), status: "DRAFT",
+      name: `${monthName(0)} Payroll`, salaryStructureId: standard.id,
+      periodStart: monthStart(0), periodEnd: monthEnd(0), status: "DRAFT",
     },
   });
 
@@ -526,7 +587,7 @@ async function main() {
         note: status === "PENDING" ? "Locked out after changing my phone." : "Handled over the phone.",
         status,
         resolvedById: status === "PENDING" ? null : adminUser.id,
-        resolvedAt: status === "PENDING" ? null : new Date(Date.UTC(2026, 8, 2)),
+        resolvedAt: status === "PENDING" ? null : addDays(TODAY, -randInt(1, 6)),
       },
     });
   }
