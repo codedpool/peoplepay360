@@ -72,6 +72,53 @@ async function main() {
     data: { employeeId: dave.id, startDate: new Date("2023-09-01"), endDate: null, wage: 62000, salaryStructureId: structure.id, status: "ACTIVE" },
   });
 
+  // Time Off Types: two allocation-backed leave types plus Leave Without Pay,
+  // which doesn't draw against a balance (requiresAllocation: false) since
+  // there's nothing to allocate — it's unpaid leave, approved directly.
+  const casualLeave = await prisma.timeOffType.create({
+    data: { name: "Casual Leave", unit: "DAYS", requiresAllocation: true, payrollIntegrated: false, approverRole: "HR_MANAGER" },
+  });
+  const sickLeave = await prisma.timeOffType.create({
+    data: { name: "Sick Leave", unit: "DAYS", requiresAllocation: true, payrollIntegrated: false, approverRole: "HR_MANAGER" },
+  });
+  const leaveWithoutPay = await prisma.timeOffType.create({
+    data: { name: "Leave Without Pay", unit: "DAYS", requiresAllocation: false, payrollIntegrated: true, approverRole: "HR_MANAGER" },
+  });
+
+  const YEAR_START = new Date("2025-01-01");
+  const YEAR_END = new Date("2025-12-31");
+
+  // Alice and Bob: fully active, approved allocations with some days already
+  // taken — this is what the Employee self-service "Balances" view and the
+  // HR/Admin Allocations list both read from (same endpoint, same data; there
+  // is no separate store to fall out of sync).
+  await prisma.timeOffAllocation.create({
+    data: { employeeId: alice.id, timeOffTypeId: casualLeave.id, allocated: 12, taken: 3, remaining: 9, validFrom: YEAR_START, validTo: YEAR_END, status: "ACTIVE" },
+  });
+  await prisma.timeOffAllocation.create({
+    data: { employeeId: alice.id, timeOffTypeId: sickLeave.id, allocated: 8, taken: 1, remaining: 7, validFrom: YEAR_START, validTo: YEAR_END, status: "ACTIVE" },
+  });
+  await prisma.timeOffAllocation.create({
+    data: { employeeId: bob.id, timeOffTypeId: casualLeave.id, allocated: 12, taken: 0, remaining: 12, validFrom: YEAR_START, validTo: YEAR_END, status: "ACTIVE" },
+  });
+  await prisma.timeOffAllocation.create({
+    data: { employeeId: bob.id, timeOffTypeId: sickLeave.id, allocated: 8, taken: 2, remaining: 6, validFrom: YEAR_START, validTo: YEAR_END, status: "ACTIVE" },
+  });
+
+  // Dave: one allocation still PENDING HR approval — demonstrates the
+  // two-stage allocation lifecycle (grant -> approve) live in the seed data,
+  // not just in a test.
+  await prisma.timeOffAllocation.create({
+    data: { employeeId: dave.id, timeOffTypeId: casualLeave.id, allocated: 12, taken: 0, remaining: 12, validFrom: YEAR_START, validTo: YEAR_END, status: "PENDING" },
+  });
+
+  // Alice: one PENDING request against her approved Casual Leave balance —
+  // gives HR something real to approve/refuse on first login, and gives the
+  // demo an "approve it and watch the balance move" moment.
+  await prisma.timeOffRequest.create({
+    data: { employeeId: alice.id, timeOffTypeId: casualLeave.id, startDate: new Date("2025-11-10"), endDate: new Date("2025-11-11"), duration: 2, status: "PENDING" },
+  });
+
   // Demo password sourced from env, never hardcoded — printed once so it can be used to log in.
   const demoPassword = process.env.SEED_DEMO_PASSWORD || crypto.randomBytes(9).toString("base64url");
   const passwordHash = await bcrypt.hash(demoPassword, 12);
