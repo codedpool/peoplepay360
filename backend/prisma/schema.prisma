@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  HR_MANAGER
+  HR_PAYROLL_USER
+  HR_PAYROLL_MANAGER
+  ADMIN
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ScheduleType {
+  FULL_TIME
+  PART_TIME
+  SHIFT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  OVERTIME
+  MISSING_CHECKOUT
+}
+
+enum TimeOffUnit {
+  DAYS
+  HOURS
+}
+
+enum AllocationStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum TimeOffRequestStatus {
+  PENDING
+  APPROVED
+  REFUSED
+  CANCELLED
+}
+
+enum RuleCategory {
+  BASIC
+  ALLOWANCE
+  GROSS
+  DEDUCTION
+  NET
+}
+
+enum ComputationMethod {
+  FIXED
+  PERCENTAGE
+  FORMULA
+}
+
+enum PayrunStatus {
+  DRAFT
+  COMPUTING
+  COMPUTED
+  VALIDATED
+  PAID
+  SENT
+}
+
+enum PayslipStatus {
+  DRAFT
+  COMPUTED
+  VALIDATED
+  PAID
+  SENT
+}
+
+model User {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                Role
+  employeeId          String?   @unique @map("employee_id")
+  employee            Employee? @relation(fields: [employeeId], references: [id])
+  isActive            Boolean   @default(true) @map("is_active")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  lastLoginAt         DateTime? @map("last_login_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique @map("token_hash")
+  familyId   String    @map("family_id")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?  @map("actor_user_id")
+  actor        User?    @relation(fields: [actorUserId], references: [id])
+  action       String
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  before       Json?
+  after        Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@map("audit_logs")
+}
+
+model Employee {
+  id            String         @id @default(uuid())
+  name          String
+  department    String
+  managerId     String?        @map("manager_id")
+  manager       Employee?      @relation("EmployeeManager", fields: [managerId], references: [id])
+  reports       Employee[]     @relation("EmployeeManager")
+  jobPosition   String         @map("job_position")
+  scheduleId    String?        @map("schedule_id")
+  schedule      WorkingSchedule? @relation(fields: [scheduleId], references: [id])
+  status        EmployeeStatus @default(ACTIVE)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  user                User?
+  contracts           Contract[]
+  attendances         Attendance[]
+  timeOffAllocations  TimeOffAllocation[]
+  timeOffRequests     TimeOffRequest[]
+  payslips            Payslip[]
+
+  @@index([department])
+  @@index([status])
+  @@map("employees")
+}
+
+model Contract {
+  id                String         @id @default(uuid())
+  employeeId        String         @map("employee_id")
+  employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  startDate         DateTime       @map("start_date") @db.Date
+  endDate           DateTime?      @map("end_date") @db.Date
+  wage              Decimal        @db.Decimal(12, 2)
+  salaryStructureId String?        @map("salary_structure_id")
+  salaryStructure   SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
+  status            ContractStatus @default(DRAFT)
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  payslips Payslip[]
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("contracts")
+}
+
+model WorkingSchedule {
+  id          String       @id @default(uuid())
+  name        String
+  type        ScheduleType
+  weeklyHours Decimal      @map("weekly_hours") @db.Decimal(5, 2)
+  pattern     Json
+
+  employees Employee[]
+
+  @@map("working_schedules")
+}
+
+model Attendance {
+  id                String            @id @default(uuid())
+  employeeId        String            @map("employee_id")
+  employee          Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  checkIn           DateTime          @map("check_in")
+  checkOut          DateTime?         @map("check_out")
+  workedHours       Decimal?          @map("worked_hours") @db.Decimal(5, 2)
+  status            AttendanceStatus
+  isManualCorrection Boolean          @default(false) @map("is_manual_correction")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  @@index([employeeId])
+  @@index([checkIn])
+  @@map("attendances")
+}
+
+model TimeOffType {
+  id                String      @id @default(uuid())
+  name              String
+  unit              TimeOffUnit
+  requiresAllocation Boolean    @default(true) @map("requires_allocation")
+  payrollIntegrated Boolean     @default(false) @map("payroll_integrated")
+
+  allocations TimeOffAllocation[]
+  requests    TimeOffRequest[]
+
+  @@map("time_off_types")
+}
+
+model TimeOffAllocation {
+  id            String            @id @default(uuid())
+  employeeId    String            @map("employee_id")
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timeOffTypeId String            @map("time_off_type_id")
+  timeOffType   TimeOffType       @relation(fields: [timeOffTypeId], references: [id])
+  allocated     Decimal           @db.Decimal(6, 2)
+  taken         Decimal           @default(0) @db.Decimal(6, 2)
+  remaining     Decimal           @db.Decimal(6, 2)
+  validFrom     DateTime          @map("valid_from") @db.Date
+  validTo       DateTime          @map("valid_to") @db.Date
+  status        AllocationStatus  @default(ACTIVE)
+
+  @@index([employeeId])
+  @@map("time_off_allocations")
+}
+
+model TimeOffRequest {
+  id            String                @id @default(uuid())
+  employeeId    String                @map("employee_id")
+  employee      Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  timeOffTypeId String                @map("time_off_type_id")
+  timeOffType   TimeOffType           @relation(fields: [timeOffTypeId], references: [id])
+  startDate     DateTime              @map("start_date") @db.Date
+  endDate       DateTime              @map("end_date") @db.Date
+  duration      Decimal               @db.Decimal(6, 2)
+  status        TimeOffRequestStatus  @default(PENDING)
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  @@index([employeeId])
+  @@index([status])
+  @@map("time_off_requests")
+}
+
+model SalaryStructure {
+  id     String  @id @default(uuid())
+  name   String
+  active Boolean @default(true)
+
+  rules     SalaryRule[]
+  contracts Contract[]
+  payruns   Payrun[]
+
+  @@map("salary_structures")
+}
+
+model SalaryRule {
+  id                String            @id @default(uuid())
+  salaryStructureId String            @map("salary_structure_id")
+  salaryStructure   SalaryStructure   @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+  name              String
+  code              String
+  category          RuleCategory
+  sequence          Int
+  computationMethod ComputationMethod @map("computation_method")
+  formulaOrValue    String            @map("formula_or_value")
+
+  payslipLines PayslipLine[]
+
+  @@index([salaryStructureId, sequence])
+  @@map("salary_rules")
+}
+
+model Payrun {
+  id                String          @id @default(uuid())
+  name              String
+  salaryStructureId String          @map("salary_structure_id")
+  salaryStructure   SalaryStructure @relation(fields: [salaryStructureId], references: [id])
+  periodStart       DateTime        @map("period_start") @db.Date
+  periodEnd         DateTime        @map("period_end") @db.Date
+  status            PayrunStatus    @default(DRAFT)
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  payslips Payslip[]
+
+  @@index([status])
+  @@map("payruns")
+}
+
+model Payslip {
+  id          String        @id @default(uuid())
+  payrunId    String        @map("payrun_id")
+  payrun      Payrun        @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  employeeId  String        @map("employee_id")
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  contractId  String        @map("contract_id")
+  contract    Contract      @relation(fields: [contractId], references: [id])
+  status      PayslipStatus @default(DRAFT)
+  workedDays  Decimal       @map("worked_days") @db.Decimal(5, 2)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  lines PayslipLine[]
+
+  @@unique([payrunId, employeeId])
+  @@index([employeeId])
+  @@map("payslips")
+}
+
+model PayslipLine {
+  id           String     @id @default(uuid())
+  payslipId    String     @map("payslip_id")
+  payslip      Payslip    @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  salaryRuleId String     @map("salary_rule_id")
+  salaryRule   SalaryRule @relation(fields: [salaryRuleId], references: [id])
+  amount       Decimal    @db.Decimal(12, 2)
+
+  @@index([payslipId])
+  @@map("payslip_lines")
+}
