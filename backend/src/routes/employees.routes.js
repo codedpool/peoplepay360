@@ -7,6 +7,7 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -17,6 +18,9 @@ const createEmployeeSchema = z.object({
   managerId: z.string().uuid().nullable().optional(),
   scheduleId: z.string().uuid().nullable().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  // No actual bank details are stored anywhere (out of scope) — this is only
+  // the signal the Payroll Dashboard's "missing bank account" alert reads.
+  bankAccountOnFile: z.boolean().optional(),
 });
 
 const updateEmployeeSchema = createEmployeeSchema.partial();
@@ -66,6 +70,7 @@ router.post(
   validateBody(createEmployeeSchema),
   asyncHandler(async (req, res) => {
     const employee = await prisma.employee.create({ data: req.body });
+    await invalidateDashboardCache();
     res.status(201).json(employee);
   })
 );
@@ -81,6 +86,7 @@ router.patch(
     if (!existing) return res.status(404).json({ error: "Employee not found" });
 
     const employee = await prisma.employee.update({ where: { id }, data: req.body });
+    await invalidateDashboardCache();
     res.json(employee);
   })
 );

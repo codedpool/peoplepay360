@@ -21,6 +21,7 @@ const salaryStructureRoutes = require("./routes/salaryStructures.routes");
 const salaryRuleRoutes = require("./routes/salaryRules.routes");
 const payrunRoutes = require("./routes/payruns.routes");
 const payslipRoutes = require("./routes/payslips.routes");
+const dashboardRoutes = require("./routes/dashboard.routes");
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use("/api/salary-structures", salaryStructureRoutes);
 app.use("/api/salary-structures/:structureId/rules", salaryRuleRoutes);
 app.use("/api/payruns", payrunRoutes);
 app.use("/api/payslips", payslipRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Swagger UI at /api-docs — the global helmet() CSP above blocks its inline
 // script (script-src 'self', no 'unsafe-inline'). helmet has no per-path

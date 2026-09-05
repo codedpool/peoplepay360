@@ -2,6 +2,7 @@ const { Worker } = require("bullmq");
 const { connection } = require("../lib/queue");
 const { prisma } = require("../lib/prisma");
 const { computePayrun } = require("../services/payrunCompute");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 // Runs as its own process (`npm run worker`), separate from the API. The
 // enqueue route returns immediately with a job id; this is what actually
@@ -18,6 +19,9 @@ const payrunComputeWorker = new Worker(
         await job.updateProgress({ done, total });
       },
     });
+
+    // Payslip data just changed — every dashboard number derives from it.
+    await invalidateDashboardCache();
 
     await prisma.auditLog.create({
       data: {

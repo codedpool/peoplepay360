@@ -30,6 +30,7 @@ const BASE_PERMISSIONS = {
     "payslip:write",
     "salarystructure:read",
     "salaryrule:read",
+    "dashboard:read",
   ],
   HR_PAYROLL_MANAGER: [
     "employee:read",
@@ -42,6 +43,7 @@ const BASE_PERMISSIONS = {
     "salarystructure:write",
     "salaryrule:read",
     "salaryrule:write",
+    "dashboard:read",
   ],
   ADMIN: ["*"],
 };
