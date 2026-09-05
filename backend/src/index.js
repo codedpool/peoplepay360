@@ -6,6 +6,7 @@ const pinoHttp = require("pino-http");
 const { env } = require("./lib/env");
 const { prisma } = require("./lib/prisma");
 const { redis } = require("./lib/redis");
+const authRoutes = require("./routes/auth.routes");
 
 const app = express();
 
@@ -24,6 +25,8 @@ app.get("/health", async (_req, res) => {
     res.status(503).json({ status: "degraded" });
   }
 });
+
+app.use("/api/auth", authRoutes);
 
 app.listen(env.port, () => {
   console.log(`peoplepay360 backend listening on port ${env.port}`);
