@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: theme("colors.line");
+  }
+  body {
+    @apply bg-paper text-ink antialiased;
+    font-feature-settings: "cv05", "cv11";
+  }
+  ::selection {
+    background: theme("colors.ledger.light");
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.ledger.DEFAULT");
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Numeric/tabular data: currency, ids, dates in tables. Never for prose. */
+  .num {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Underline-style field, evokes filling in a paper form. */
+  .field {
+    @apply w-full bg-transparent border-0 border-b border-line px-0 py-1.5 text-[0.9rem] text-ink
+      placeholder:text-fade/60 focus:outline-none focus:border-ledger transition-colors;
+  }
+  .field-label {
+    @apply block text-[0.72rem] uppercase tracking-wide text-fade mb-1;
+  }
+  .field-group {
+    @apply flex flex-col gap-1;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 text-[0.85rem] font-medium px-3.5 py-2
+      transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-ledger text-paper hover:bg-ledger-dark;
+  }
+  .btn-secondary {
+    @apply btn border border-line text-ink hover:border-ink;
+  }
+  .btn-danger {
+    @apply btn border border-stamp text-stamp hover:bg-stamp hover:text-paper;
+  }
+  .btn-ghost {
+    @apply btn text-fade hover:text-ink;
+  }
+
+  /* Rubber-stamp status marker: double ring, slight tilt, not a soft pill. */
+  .stamp {
+    @apply inline-flex items-center justify-center text-[0.68rem] font-semibold uppercase tracking-wide
+      px-2 py-0.5 border rounded-sm -rotate-1 leading-tight;
+  }
+  .stamp-approved { @apply stamp border-approved text-approved bg-approved-light; }
+  .stamp-pending { @apply stamp border-seal text-seal bg-seal-light; }
+  .stamp-blocking { @apply stamp border-stamp text-stamp bg-stamp-light; }
+  .stamp-neutral { @apply stamp border-fade/50 text-fade bg-panel; }
+
+  .panel {
+    @apply bg-panel border border-line;
+  }
+
+  .ledger-table {
+    @apply w-full text-left text-[0.85rem] border-collapse;
+  }
+  .ledger-table thead th {
+    @apply text-[0.72rem] uppercase tracking-wide text-fade font-medium text-left py-2 border-b border-line;
+  }
+  .ledger-table tbody td {
+    @apply py-2.5 border-b border-line/70;
+  }
+  .ledger-table tbody tr:hover {
+    @apply bg-panel;
+  }
+
+  .register-strip {
+    @apply flex flex-wrap divide-x divide-line border border-line bg-panel;
+  }
+  .register-item {
+    @apply flex-1 min-w-[9rem] px-4 py-3;
+  }
+}

@@ -1,0 +1,126 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import ErrorNote from "../ui/ErrorNote";
+import Stamp from "../ui/Stamp";
+
+// Remaining balance across this type's ACTIVE allocations — an advisory sum
+// for the employee's own visibility. The real check (which allocation
+// actually covers these exact dates) happens server-side at approval time;
+// this just warns before they submit, it never blocks it.
+function remainingFor(typeId, allocations) {
+  return allocations
+    .filter((a) => a.timeOffTypeId === typeId && a.status === "ACTIVE")
+    .reduce((sum, a) => sum + Number(a.remaining), 0);
+}
+
+export default function RequestTimeOffForm({ types, allocations = [], submitting = false, error, onSubmit, onCancel }) {
+  const [timeOffTypeId, setTimeOffTypeId] = useState(types[0]?.id ?? "");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [duration, setDuration] = useState("");
+
+  const selectedType = types.find((t) => t.id === timeOffTypeId);
+  const unpaidType = types.find((t) => !t.requiresAllocation);
+
+  const remaining = useMemo(
+    () => (selectedType?.requiresAllocation ? remainingFor(timeOffTypeId, allocations) : null),
+    [selectedType, timeOffTypeId, allocations]
+  );
+  const requestedAmount = Number(duration) || 0;
+  const insufficientBalance = remaining !== null && requestedAmount > 0 && requestedAmount > remaining;
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    onSubmit({ timeOffTypeId, startDate, endDate, duration: requestedAmount });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <div className="field-group">
+        <label className="field-label">Time off type</label>
+        <select required className="field" value={timeOffTypeId} onChange={(e) => setTimeOffTypeId(e.target.value)}>
+          {types.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {remaining !== null && (
+          <p className="text-[0.78rem] text-fade mt-1.5">
+            {remaining} {selectedType.unit.toLowerCase()} remaining
+          </p>
+        )}
+        {selectedType && !selectedType.requiresAllocation && (
+          <p className="text-[0.78rem] text-fade mt-1.5">No balance required for this leave type.</p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-5">
+        <div className="field-group">
+          <label className="field-label">Start date</label>
+          <input
+            type="date"
+            required
+            className="field num"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </div>
+        <div className="field-group">
+          <label className="field-label">End date</label>
+          <input type="date" required className="field num" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="field-group">
+        <label className="field-label">Duration ({selectedType?.unit?.toLowerCase() ?? "days"})</label>
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          required
+          className="field num"
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+        />
+      </div>
+
+      {insufficientBalance && (
+        <div className="panel border-seal px-4 py-3.5 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Stamp tone="pending">Low balance</Stamp>
+            <p className="text-[0.82rem]">
+              Only {remaining} {selectedType.unit.toLowerCase()} of {selectedType.name} remaining — this request needs{" "}
+              {requestedAmount}.
+            </p>
+          </div>
+          {unpaidType ? (
+            <button
+              type="button"
+              className="text-[0.8rem] text-ledger hover:text-ledger-dark self-start"
+              onClick={() => setTimeOffTypeId(unpaidType.id)}
+            >
+              Switch to {unpaidType.name} instead →
+            </button>
+          ) : (
+            <p className="text-[0.78rem] text-fade">
+              You can still submit — approval will be checked against your actual balance.
+            </p>
+          )}
+        </div>
+      )}
+
+      <ErrorNote>{error}</ErrorNote>
+
+      <div className="flex items-center gap-3 justify-end pt-1">
+        {onCancel && (
+          <button type="button" onClick={onCancel} className="btn-secondary">
+            Cancel
+          </button>
+        )}
+        <button type="submit" disabled={submitting} className="btn-primary">
+          {submitting ? "Submitting…" : "Submit request"}
+        </button>
+      </div>
+    </form>
+  );
+}
