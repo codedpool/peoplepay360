@@ -68,11 +68,38 @@
     @apply bg-panel border border-line;
   }
 
+  /* No text-left here on purpose — that's the browser default for table
+     cells anyway, and asserting it at this level fights the per-column
+     .text-right classes at equal specificity depending on Tailwind's
+     compiled class order. Leaving it unset lets each th/td's own class win. */
   .ledger-table {
-    @apply w-full text-left text-[0.85rem] border-collapse;
+    @apply w-full text-[0.85rem];
+    border-collapse: separate;
+    border-spacing: 0;
   }
+  /* Horizontal padding lives here, once, instead of on every th/td in every
+     page — border-collapse previously merged cell borders AND left cells with
+     zero horizontal gap, so adjacent columns (e.g. a right-aligned number
+     next to a left-aligned date) rendered flush against each other with no
+     visual separation. border-collapse: separate above plus this padding is
+     what actually creates the column gutters a "table" is supposed to have. */
+  .ledger-table thead th,
+  .ledger-table tbody td {
+    @apply px-3;
+  }
+  .ledger-table thead th:first-child,
+  .ledger-table tbody td:first-child {
+    @apply pl-0;
+  }
+  .ledger-table thead th:last-child,
+  .ledger-table tbody td:last-child {
+    @apply pr-0;
+  }
+  /* Alignment is per-column (each th/td carries its own text-left/text-right) —
+     this rule only sets the shared type/spacing, so a .text-right on an
+     individual header or cell isn't fighting a more specific selector here. */
   .ledger-table thead th {
-    @apply text-[0.72rem] uppercase tracking-wide text-fade font-medium text-left py-2 border-b border-line;
+    @apply text-[0.72rem] uppercase tracking-wide text-fade font-medium py-2 border-b border-line;
   }
   .ledger-table tbody td {
     @apply py-2.5 border-b border-line/70;
