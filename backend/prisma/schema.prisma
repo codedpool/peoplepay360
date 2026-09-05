@@ -47,7 +47,9 @@ enum TimeOffUnit {
 }
 
 enum AllocationStatus {
+  PENDING
   ACTIVE
+  REFUSED
   EXPIRED
 }
 
@@ -93,7 +95,7 @@ model User {
   id                  String    @id @default(uuid())
   email               String    @unique
   passwordHash        String    @map("password_hash")
-  role                Role
+  roles               Role[]
   employeeId          String?   @unique @map("employee_id")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   isActive            Boolean   @default(true) @map("is_active")
@@ -217,6 +219,8 @@ model TimeOffType {
   unit              TimeOffUnit
   requiresAllocation Boolean    @default(true) @map("requires_allocation")
   payrollIntegrated Boolean     @default(false) @map("payroll_integrated")
+  approverRole      String?     @map("approver_role")
+  displayColor      String?     @map("display_color")
 
   allocations TimeOffAllocation[]
   requests    TimeOffRequest[]
@@ -235,7 +239,7 @@ model TimeOffAllocation {
   remaining     Decimal           @db.Decimal(6, 2)
   validFrom     DateTime          @map("valid_from") @db.Date
   validTo       DateTime          @map("valid_to") @db.Date
-  status        AllocationStatus  @default(ACTIVE)
+  status        AllocationStatus  @default(PENDING)
 
   @@index([employeeId])
   @@map("time_off_allocations")
