@@ -31,6 +31,7 @@ const BASE_PERMISSIONS = {
     "payslip:write",
     "salarystructure:read",
     "salaryrule:read",
+    "dashboard:read",
   ],
   HR_PAYROLL_MANAGER: [
     "employee:read",
@@ -43,6 +44,7 @@ const BASE_PERMISSIONS = {
     "salarystructure:write",
     "salaryrule:read",
     "salaryrule:write",
+    "dashboard:read",
   ],
   ADMIN: ["*"],
 };
@@ -62,13 +64,22 @@ export function hasPermission(roles, permission) {
   });
 }
 
+export function hasAnyPermission(roles, permissions) {
+  return permissions.some((permission) => hasPermission(roles, permission));
+}
+
 export function isElevated(roles) {
   const roleList = Array.isArray(roles) ? roles : [roles];
   return roleList.some((role) => role !== "EMPLOYEE");
 }
 
 export function homeRouteFor(user) {
-  return user && isElevated(user.roles) ? "/employees" : "/me";
+  if (!user) return "/me";
+  // A forced password change outranks wherever they were headed — the API
+  // rejects every other call with 428 until it's done, so landing anywhere
+  // else would just render a page full of errors.
+  if (user.mustChangePassword) return "/change-password";
+  return isElevated(user.roles) ? "/employees" : "/me";
 }
 
 export const ROLE_LABELS = {

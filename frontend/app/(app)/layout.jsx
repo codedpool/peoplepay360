@@ -4,20 +4,26 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import Nav from "../../components/shell/Nav";
-import EmployeeNav from "../../components/shell/EmployeeNav";
 
 export default function AppLayout({ children }) {
-  const { user, status, elevated, logout } = useAuth();
+  const { user, status, elevated, mustChangePassword, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
+  // The API refuses every request with 428 until the password is changed, so
+  // there is nothing any page in here could usefully render.
+  useEffect(() => {
+    if (mustChangePassword) router.replace("/change-password");
+  }, [mustChangePassword, router]);
+
   if (status === "loading") {
     return <div className="min-h-screen flex items-center justify-center text-fade text-sm">Loading…</div>;
   }
   if (!user) return null;
+  if (mustChangePassword) return null;
 
   if (!elevated && !user.employeeId) {
     return (
@@ -38,7 +44,7 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="min-h-screen flex bg-paper">
-      {elevated ? <Nav /> : <EmployeeNav />}
+      <Nav />
       <main className="flex-1 min-w-0 px-9 py-8">{children}</main>
     </div>
   );

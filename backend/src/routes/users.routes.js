@@ -7,6 +7,7 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { hashPassword } = require("../lib/hash");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { applyAdminPasswordReset, MIN_PASSWORD_LENGTH } = require("../services/passwordReset");
 
 const router = express.Router();
 
@@ -14,9 +15,13 @@ const ROLE_VALUES = ["EMPLOYEE", "HR_MANAGER", "HR_PAYROLL_USER", "HR_PAYROLL_MA
 
 const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(MIN_PASSWORD_LENGTH),
   employeeId: z.string().uuid().nullable().optional(),
   roles: z.array(z.enum(ROLE_VALUES)).min(1),
+});
+
+const resetPasswordSchema = z.object({
+  newPassword: z.string().min(MIN_PASSWORD_LENGTH),
 });
 
 // `roles` is intentionally editable here for an admin acting on someone else —
@@ -34,6 +39,7 @@ function publicUser(user) {
     roles: user.roles,
     employeeId: user.employeeId,
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
   };
@@ -107,6 +113,39 @@ router.patch(
       }
       throw err;
     }
+  })
+);
+
+// Admin resets somebody else's password directly, without them having raised a
+// ticket first — the "they're standing at my desk locked out" case.
+//
+// Self-reset is refused rather than allowed: an admin changing their own
+// password belongs on /api/auth/change-password, which demands the current
+// password. Routing it here instead would let anyone holding a live admin
+// token replace that account's password without proving they know the old one.
+router.post(
+  "/:id/reset-password",
+  requireAuth,
+  requirePermission("user:manage"),
+  validateBody(resetPasswordSchema),
+  asyncHandler(async (req, res) => {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: "User not found" });
+
+    if (target.id === req.user.id) {
+      return res
+        .status(403)
+        .json({ error: "Use the change-password flow to set your own password" });
+    }
+
+    const updated = await applyAdminPasswordReset({
+      targetUser: target,
+      newPassword: req.body.newPassword,
+      actorUserId: req.user.id,
+      reason: "adminDirectReset",
+    });
+
+    res.json(publicUser(updated));
   })
 );
 

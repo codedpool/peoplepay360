@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const { deriveAttendanceFields } = require("../src/services/attendance");
 
 const prisma = new PrismaClient();
 
@@ -71,6 +72,81 @@ async function main() {
   await prisma.contract.create({
     data: { employeeId: dave.id, startDate: new Date("2023-09-01"), endDate: null, wage: 62000, salaryStructureId: structure.id, status: "ACTIVE" },
   });
+
+  // Attendance for the previous full calendar month. Payslips are prorated
+  // against attendance now, so an empty attendances table computes every demo
+  // payslip to zero — this is what gives a freshly-seeded payrun something to
+  // actually pay. The four employees are deliberately varied so one payrun
+  // shows the whole classification working:
+  //
+  //   Alice — every working day in full            -> paid a full month
+  //   Bob   — three half-days and one open session -> paid slightly under
+  //   Carla — one token 20-minute appearance       -> that day pays nothing
+  //   Dave  — joined late, four days only          -> paid roughly a fifth
+  //
+  // Statuses and day fractions are derived through the same service the API
+  // uses rather than written by hand, so seeded rows can't disagree with rows
+  // the app creates.
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+
+  const workingDays = [];
+  for (const d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
+    const weekday = d.getDay();
+    if (weekday !== 0 && weekday !== 6) workingDays.push(new Date(d));
+  }
+
+  // Local-time constructor on purpose: deriveStatus compares the check-in
+  // against the schedule's start using the wall clock, so building these in
+  // UTC would mark every seeded day LATE on any machine east of Greenwich.
+  async function recordDay(employeeId, date, { in: inTime, out: outTime }) {
+    const at = (time) => {
+      if (!time) return null;
+      const [h, m] = time.split(":").map(Number);
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m, 0);
+    };
+    const checkIn = at(inTime);
+    const checkOut = at(outTime);
+
+    await prisma.attendance.create({
+      data: {
+        employeeId,
+        checkIn,
+        checkOut,
+        ...deriveAttendanceFields({ checkIn, checkOut, schedule }),
+      },
+    });
+  }
+
+  for (const [index, day] of workingDays.entries()) {
+    const isLast = index === workingDays.length - 1;
+
+    await recordDay(alice.id, day, { in: "09:00", out: "17:00" });
+
+    // Bob: half-days on the 3rd, 8th and 13th working day, and he forgot to
+    // check out on the last one — the MISSING_CHECKOUT exception HR reviews.
+    if (isLast) {
+      await recordDay(bob.id, day, { in: "09:00", out: null });
+    } else if (index === 2 || index === 7 || index === 12) {
+      await recordDay(bob.id, day, { in: "09:00", out: "13:00" });
+    } else {
+      await recordDay(bob.id, day, { in: "09:00", out: "17:00" });
+    }
+
+    // Carla: one 20-minute appearance that used to count as a full present day
+    // and now correctly earns nothing.
+    if (index === 5) {
+      await recordDay(carla.id, day, { in: "09:00", out: "09:20" });
+    } else {
+      await recordDay(carla.id, day, { in: "09:00", out: "17:00" });
+    }
+
+    // Dave: only the first four working days of the month.
+    if (index < 4) {
+      await recordDay(dave.id, day, { in: "09:00", out: "17:00" });
+    }
+  }
 
   // Time Off Types: two allocation-backed leave types plus Leave Without Pay,
   // which doesn't draw against a balance (requiresAllocation: false) since

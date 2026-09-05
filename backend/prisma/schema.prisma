@@ -35,10 +35,17 @@ enum ScheduleType {
 
 enum AttendanceStatus {
   PRESENT
+  HALF_DAY
   LATE
   ABSENT
   OVERTIME
   MISSING_CHECKOUT
+}
+
+enum PasswordResetRequestStatus {
+  PENDING
+  COMPLETED
+  REJECTED
 }
 
 enum TimeOffUnit {
@@ -99,15 +106,48 @@ model User {
   employeeId          String?   @unique @map("employee_id")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   isActive            Boolean   @default(true) @map("is_active")
+  // Set whenever an admin sets someone else's password (a direct reset, or by
+  // resolving a PasswordResetRequest). The login response carries it and the
+  // client is forced to /change-password before anything else — so an admin
+  // never holds a lasting working password for another person's account.
+  mustChangePassword  Boolean   @default(false) @map("must_change_password")
   failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime? @map("locked_until")
   lastLoginAt         DateTime? @map("last_login_at")
   createdAt           DateTime  @default(now()) @map("created_at")
 
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
+  refreshTokens          RefreshToken[]
+  auditLogs              AuditLog[]
+  passwordResetRequests  PasswordResetRequest[] @relation("PasswordResetSubject")
+  passwordResetsResolved PasswordResetRequest[] @relation("PasswordResetResolver")
 
   @@map("users")
+}
+
+// A "I forgot my password" ticket raised from the login screen. There's no
+// outbound mail path for a self-service reset link in this system, so the
+// flow is deliberately human: the request lands in an admin's queue and an
+// admin sets a new password out-of-band.
+//
+// `email` is stored as typed rather than only as a userId, because the row is
+// also created (with userId null) for an address that matches no account —
+// the endpoint must answer identically either way or it becomes an account
+// enumeration oracle.
+model PasswordResetRequest {
+  id           String                     @id @default(uuid())
+  email        String
+  userId       String?                    @map("user_id")
+  user         User?                      @relation("PasswordResetSubject", fields: [userId], references: [id], onDelete: SetNull)
+  note         String?
+  status       PasswordResetRequestStatus @default(PENDING)
+  resolvedById String?                    @map("resolved_by_id")
+  resolvedBy   User?                      @relation("PasswordResetResolver", fields: [resolvedById], references: [id])
+  resolvedAt   DateTime?                  @map("resolved_at")
+  createdAt    DateTime                   @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([userId])
+  @@map("password_reset_requests")
 }
 
 model RefreshToken {
@@ -214,6 +254,12 @@ model Attendance {
   checkOut          DateTime?         @map("check_out")
   workedHours       Decimal?          @map("worked_hours") @db.Decimal(5, 2)
   overtimeHours     Decimal           @default(0) @map("overtime_hours") @db.Decimal(5, 2)
+  // How much of a working day this record actually earns: 1 = full, 0.5 =
+  // half, 0 = didn't clear the half-day bar (or never checked out). Derived
+  // alongside `status` in services/attendance.js and never client-supplied.
+  // This — not a count of rows — is what payroll prorates against, so a
+  // one-minute check-in can no longer pay a full day.
+  dayFraction       Decimal           @default(0) @map("day_fraction") @db.Decimal(3, 2)
   status            AttendanceStatus
   isManualCorrection Boolean          @default(false) @map("is_manual_correction")
   createdAt         DateTime          @default(now()) @map("created_at")
@@ -265,6 +311,11 @@ model TimeOffRequest {
   endDate       DateTime              @map("end_date") @db.Date
   duration      Decimal               @db.Decimal(6, 2)
   status        TimeOffRequestStatus  @default(PENDING)
+  // Which allocation approval actually deducted from. Recorded at approve
+  // time so a later cancellation can put the exact same balance back —
+  // re-running the "which allocation covers these dates" lookup at cancel
+  // time could resolve to a different row if allocations changed in between.
+  allocationId  String?               @map("allocation_id")
   createdAt     DateTime              @default(now()) @map("created_at")
 
   @@index([employeeId])

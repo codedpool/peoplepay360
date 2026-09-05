@@ -2,8 +2,15 @@
 
 import { createContext, useContext, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { login as apiLogin, logout as apiLogout, bootstrapSession, onUnauthorized } from "./api";
-import { hasPermission, isElevated } from "./permissions";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  changePassword as apiChangePassword,
+  bootstrapSession,
+  onUnauthorized,
+  onPasswordChangeRequired,
+} from "./api";
+import { hasPermission, hasAnyPermission, isElevated } from "./permissions";
 
 function decodeJwt(token) {
   try {
@@ -33,6 +40,15 @@ export function AuthProvider({ children }) {
       setUser(null);
       setStatus("unauthenticated");
     });
+    // The API answers 428 to everything until the password is changed. A page
+    // that was mid-load when that happens flips the flag here so the layout
+    // can route to the change form, instead of each page rendering its own
+    // "couldn't load" error.
+    onPasswordChangeRequired(() => {
+      setUser((current) => (current && !current.mustChangePassword
+        ? { ...current, mustChangePassword: true }
+        : current));
+    });
   }, []);
 
   useEffect(() => {
@@ -43,7 +59,13 @@ export function AuthProvider({ children }) {
       if (token) {
         const claims = decodeJwt(token);
         setUser(
-          claims && { id: claims.sub, roles: claims.roles, employeeId: claims.employeeId, email: claims.email }
+          claims && {
+            id: claims.sub,
+            roles: claims.roles,
+            employeeId: claims.employeeId,
+            email: claims.email,
+            mustChangePassword: claims.mustChangePassword === true,
+          }
         );
         setStatus(claims ? "authenticated" : "unauthenticated");
       } else {
@@ -69,11 +91,36 @@ export function AuthProvider({ children }) {
     router.replace("/login");
   }, [router]);
 
+  // Self-service change. The API hands back a fresh token whose claims no
+  // longer carry mustChangePassword, so the gate lifts without a re-login.
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    const publicUser = await apiChangePassword(currentPassword, newPassword);
+    setUser(publicUser);
+    setStatus("authenticated");
+    return publicUser;
+  }, []);
+
   const can = useCallback((permission) => (user ? hasPermission(user.roles, permission) : false), [user]);
+  const canAny = useCallback(
+    (permissions) => (user ? hasAnyPermission(user.roles, permissions) : false),
+    [user]
+  );
   const elevated = user ? isElevated(user.roles) : false;
 
   return (
-    <AuthContext.Provider value={{ user, status, login, logout, can, elevated }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        status,
+        login,
+        logout,
+        changePassword,
+        can,
+        canAny,
+        elevated,
+        mustChangePassword: user?.mustChangePassword === true,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
