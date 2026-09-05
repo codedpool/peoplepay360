@@ -148,14 +148,13 @@ describe("deriveStatus", () => {
     expect(deriveStatus({ ...monday(9, 0, 17, 0), schedule: FULL_TIME_SCHEDULE })).toBe("PRESENT");
   });
 
-  it("is LATE for a full day started past the grace period", () => {
-    // In at 09:30 (past 09:00 + 10m grace), out at 18:00 — still a full 8h.
-    expect(deriveStatus({ ...monday(9, 30, 18, 0), schedule: FULL_TIME_SCHEDULE })).toBe("LATE");
+  it("is PRESENT for a full day started late, not a separate LATE status", () => {
+    // In at 09:30 (well past the scheduled 09:00 start), out at 17:30 — a full 8h, no overtime.
+    expect(deriveStatus({ ...monday(9, 30, 17, 30), schedule: FULL_TIME_SCHEDULE })).toBe("PRESENT");
   });
 
-  // A short day is an absence regardless of when it started: calling it LATE
-  // would describe the arrival while hiding that no day was really worked.
-  it("prefers the short-day classification over LATE", () => {
+  // A short day is an absence regardless of when it started.
+  it("prefers the short-day classification over a late start", () => {
     expect(deriveStatus({ ...monday(11, 0, 12, 0), schedule: FULL_TIME_SCHEDULE })).toBe("ABSENT");
     expect(deriveStatus({ ...monday(11, 0, 15, 30), schedule: FULL_TIME_SCHEDULE })).toBe("HALF_DAY");
   });

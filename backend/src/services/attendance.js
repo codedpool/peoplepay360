@@ -1,6 +1,3 @@
-const { timeToMinutes } = require("./workingSchedule");
-
-const LATE_GRACE_MINUTES = 10;
 const OVERTIME_GRACE_MINUTES = 15;
 
 // Fallback used when an employee has no WorkingSchedule assigned. Every
@@ -17,13 +14,6 @@ function computeWorkedHours(checkIn, checkOut) {
   if (!checkOut) return null;
   const minutes = (checkOut.getTime() - checkIn.getTime()) / 60000;
   return Math.round((Math.max(minutes, 0) / 60) * 100) / 100;
-}
-
-function scheduledStartMinutes(schedule, checkIn) {
-  if (!schedule) return null;
-  const dayCode = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][checkIn.getDay()];
-  const entry = schedule.pattern.find((p) => p.day === dayCode);
-  return entry ? timeToMinutes(entry.start) : null;
 }
 
 // The single definition of "a full working day, in minutes". Both the numeric
@@ -72,15 +62,10 @@ function computeDayFraction({ checkIn, checkOut, schedule }) {
   return 0;
 }
 
-// Status is compared against the employee's assigned schedule for that weekday,
-// not a hardcoded shift — an employee with no matching pattern entry is treated
-// as off-schedule (never Late), though they're still graded full/half/absent
-// against the default working day.
-//
-// The short-day bands are checked before LATE/OVERTIME on purpose: a day that
-// didn't clear the half-day bar is an absence, and calling it "late" would
-// describe the arrival while hiding that essentially no day was worked. Within
-// the full-day band the original LATE-then-OVERTIME-then-PRESENT order stands.
+// Status is graded purely on how much of the scheduled day was actually
+// worked — a late arrival that still clears the full day is PRESENT, not a
+// separate LATE status. The short-day bands are checked first: a day that
+// didn't clear the half-day bar is an absence regardless of when it started.
 function deriveStatus({ checkIn, checkOut, schedule }) {
   // Still clocked in: the day is in progress, so it reads as PRESENT rather
   // than MISSING_CHECKOUT. Nothing is wrong yet — the employee is at work and
@@ -94,14 +79,6 @@ function deriveStatus({ checkIn, checkOut, schedule }) {
 
   if (worked < fullDay / 2) return "ABSENT";
   if (worked < fullDay) return "HALF_DAY";
-
-  const scheduledStart = scheduledStartMinutes(schedule, checkIn);
-  if (scheduledStart !== null) {
-    const checkInMinutes = checkIn.getHours() * 60 + checkIn.getMinutes();
-    if (checkInMinutes > scheduledStart + LATE_GRACE_MINUTES) {
-      return "LATE";
-    }
-  }
 
   if (worked > fullDay + OVERTIME_GRACE_MINUTES) {
     return "OVERTIME";

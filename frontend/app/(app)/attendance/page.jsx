@@ -15,7 +15,6 @@ const STATUS_TONE = {
   PRESENT: "approved",
   OVERTIME: "approved",
   HALF_DAY: "pending",
-  LATE: "pending",
   MISSING_CHECKOUT: "pending",
   ABSENT: "blocking",
 };
@@ -317,7 +316,7 @@ export default function AttendancePage() {
                     </td>
                     <td className="num text-right">{dayLabel(r.dayFraction)}</td>
                     <td>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center gap-2">
                         <Stamp tone={STATUS_TONE[r.status]}>{r.status.replace("_", " ")}</Stamp>
                         {r.isManualCorrection && <span className="text-[0.7rem] text-fade">corrected</span>}
                       </div>

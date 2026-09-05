@@ -13,7 +13,7 @@ import ErrorNote from "../../../../components/ui/ErrorNote";
 import { formatCurrency } from "../../../../lib/currency";
 
 const CONTRACT_TONE = { ACTIVE: "approved", DRAFT: "pending", EXPIRED: "neutral", CANCELLED: "blocking" };
-const ATTENDANCE_TONE = { PRESENT: "approved", OVERTIME: "approved", LATE: "pending", MISSING_CHECKOUT: "pending", ABSENT: "blocking" };
+const ATTENDANCE_TONE = { PRESENT: "approved", OVERTIME: "approved", MISSING_CHECKOUT: "pending", ABSENT: "blocking" };
 const ALLOCATION_TONE = { ACTIVE: "approved", PENDING: "pending", REFUSED: "blocking", EXPIRED: "neutral" };
 const REQUEST_TONE = { APPROVED: "approved", PENDING: "pending", REFUSED: "blocking", CANCELLED: "neutral" };
 
