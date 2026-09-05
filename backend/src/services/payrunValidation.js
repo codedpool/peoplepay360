@@ -89,6 +89,26 @@ async function validatePayrun(payrunId) {
     }
   }
 
+  // Structure mismatch: the employee's own contract nominally specifies a
+  // different Salary Structure than the one this Payrun actually computed
+  // with (computePayrun always uses Payrun.salaryStructureId uniformly for
+  // every selected employee — Contract.salaryStructureId is never consulted
+  // there). This is what gives that column an actual purpose instead of
+  // sitting unused: flagging that an employee may have been swept into the
+  // wrong Payrun. Non-blocking — a deliberate one-off override is legitimate,
+  // this is a heads-up, not an error.
+  for (const payslip of payrun.payslips) {
+    const contractStructureId = payslip.contract.salaryStructureId;
+    if (contractStructureId && contractStructureId !== payrun.salaryStructureId) {
+      findings.push({
+        code: "structure_mismatch",
+        blocking: false,
+        employeeId: payslip.employeeId,
+        message: `Employee ${payslip.employeeId}'s contract specifies a different Salary Structure than this Payrun used`,
+      });
+    }
+  }
+
   return findings;
 }
 

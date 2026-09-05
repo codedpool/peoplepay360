@@ -94,6 +94,27 @@ describe("validatePayrun", () => {
     expect(duplicate.blocking).toBe(true);
   });
 
+  it("flags a non-blocking structure mismatch when the contract's structure differs from the payrun's", async () => {
+    const contractStructure = await makeStructureWithRule();
+    const payrunStructure = await makeStructureWithRule();
+    const employeeId = await makeEmployee();
+    const contract = await prisma.contract.create({
+      data: { employeeId, startDate: new Date("2025-01-01"), wage: 1000, salaryStructureId: contractStructure.id, status: "ACTIVE" },
+    });
+    const payrun = await makePayrun(payrunStructure.id, new Date("2025-08-01"), new Date("2025-08-31"));
+    const netRule = await prisma.salaryRule.findFirst({ where: { salaryStructureId: payrunStructure.id, code: "NET" } });
+
+    await prisma.payslip.create({
+      data: { payrunId: payrun.id, employeeId, contractId: contract.id, status: "COMPUTED", workedDays: 20, lines: { create: [{ salaryRuleId: netRule.id, amount: 900 }] } },
+    });
+
+    const findings = await validatePayrun(payrun.id);
+    const mismatch = findings.find((f) => f.code === "structure_mismatch");
+    expect(mismatch).toBeDefined();
+    expect(mismatch.blocking).toBe(false);
+    expect(mismatch.employeeId).toBe(employeeId);
+  });
+
   it("returns no findings for a clean payrun", async () => {
     const structure = await makeStructureWithRule();
     const employeeId = await makeEmployee();
