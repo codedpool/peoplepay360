@@ -173,6 +173,11 @@ model Contract {
   startDate         DateTime       @map("start_date") @db.Date
   endDate           DateTime?      @map("end_date") @db.Date
   wage              Decimal        @db.Decimal(12, 2)
+  // The employee's nominal/default structure — NOT what computePayrun reads.
+  // A Payrun applies its own salaryStructureId uniformly to every selected
+  // employee; this column is instead consulted by payrunValidation's
+  // structure_mismatch check, which flags when a Payrun computed an employee
+  // against a different structure than their contract nominally specifies.
   salaryStructureId String?        @map("salary_structure_id")
   salaryStructure   SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
   status            ContractStatus @default(DRAFT)
@@ -312,6 +317,13 @@ model Payslip {
   id          String        @id @default(uuid())
   payrunId    String        @map("payrun_id")
   payrun      Payrun        @relation(fields: [payrunId], references: [id], onDelete: Cascade)
+  // Deliberately denormalized: employeeId is technically derivable via
+  // contractId -> Contract.employeeId, but is kept as its own direct column
+  // for two reasons the join path can't provide — (1) @@unique([payrunId,
+  // employeeId]) below needs both columns to physically exist on this table,
+  // it can't be expressed across a join, and (2) every ownership check
+  // (an Employee viewing their own payslips) reads this column directly on
+  // what is otherwise a very hot read path.
   employeeId  String        @map("employee_id")
   employee    Employee      @relation(fields: [employeeId], references: [id])
   contractId  String        @map("contract_id")
