@@ -85,7 +85,7 @@ export default function TimeOffRequestsPage() {
         requestsToRun.push(
           api.get(`/api/timeoff-requests?${params}`),
           api.get("/api/timeoff-allocations?pageSize=100"),
-          api.get("/api/employees?pageSize=100")
+          api.get("/api/employees?pageSize=500")
         );
       } else {
         requestsToRun.push(
@@ -233,6 +233,10 @@ export default function TimeOffRequestsPage() {
                           <Stamp tone={STATUS_TONE[r.status]}>{r.status}</Stamp>
                         </td>
                         <td className="text-right">
+                          {/* A PENDING request is withdrawn outright — no
+                              balance has moved yet. An APPROVED one already
+                              deducted the balance, so the employee can only
+                              ask HR to reverse it. */}
                           {r.status === "PENDING" && (
                             <button
                               className="text-[0.78rem] text-stamp hover:underline"
@@ -242,6 +246,18 @@ export default function TimeOffRequestsPage() {
                               {actingId === r.id ? "Cancelling…" : "Cancel"}
                             </button>
                           )}
+                          {r.status === "APPROVED" &&
+                            (r.cancellationRequested ? (
+                              <Stamp tone="pending">Cancellation requested</Stamp>
+                            ) : (
+                              <button
+                                className="text-[0.78rem] text-ledger hover:underline"
+                                disabled={actingId === r.id}
+                                onClick={() => act(r.id, "request-cancellation")}
+                              >
+                                {actingId === r.id ? "Requesting…" : "Request cancellation"}
+                              </button>
+                            ))}
                         </td>
                       </tr>
                     ))}
@@ -333,6 +349,20 @@ export default function TimeOffRequestsPage() {
                           </td>
                           <td>
                             <Stamp tone={STATUS_TONE[r.status]}>{r.status}</Stamp>
+                            {/* The employee has asked for this approved leave
+                                to be reversed — they can't do it themselves,
+                                so this is the flag that puts it in front of
+                                an approver. */}
+                            {r.cancellationRequested && (
+                              <div className="mt-1.5">
+                                <Stamp tone="pending">Cancellation asked</Stamp>
+                                {r.cancellationReason && (
+                                  <p className="text-[0.75rem] text-fade mt-1 max-w-[16rem]">
+                                    {r.cancellationReason}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="text-right whitespace-nowrap">
                             {canApprove && r.status === "PENDING" && (
