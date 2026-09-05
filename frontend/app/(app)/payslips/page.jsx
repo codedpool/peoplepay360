@@ -141,7 +141,7 @@ export default function PayslipsPage() {
                             disabled={printingId === p.id}
                             onClick={() => printPayslip(p.id)}
                           >
-                            {printingId === p.id ? "Generating…" : "Print"}
+                            {printingId === p.id ? "Generating…" : "Download PDF"}
                           </button>
                         </td>
                       </tr>
@@ -215,7 +215,7 @@ export default function PayslipsPage() {
                               disabled={printingId === p.id}
                               onClick={() => printPayslip(p.id)}
                             >
-                              {printingId === p.id ? "Generating…" : "Print"}
+                              {printingId === p.id ? "Generating…" : "Download PDF"}
                             </button>
                           </td>
                         </tr>
