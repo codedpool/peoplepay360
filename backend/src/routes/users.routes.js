@@ -8,15 +8,20 @@ const { asyncHandler } = require("../lib/asyncHandler");
 const { hashPassword } = require("../lib/hash");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { applyAdminPasswordReset, MIN_PASSWORD_LENGTH } = require("../services/passwordReset");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const ROLE_VALUES = ["EMPLOYEE", "HR_MANAGER", "HR_PAYROLL_USER", "HR_PAYROLL_MANAGER", "ADMIN"];
 
 const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(MIN_PASSWORD_LENGTH),
-  employeeId: z.string().uuid().nullable().optional(),
+  employeeId: z.coerce.number().int().positive().nullable().optional(),
   roles: z.array(z.enum(ROLE_VALUES)).min(1),
 });
 
@@ -29,7 +34,7 @@ const resetPasswordSchema = z.object({
 const updateUserSchema = z.object({
   roles: z.array(z.enum(ROLE_VALUES)).min(1).optional(),
   isActive: z.boolean().optional(),
-  employeeId: z.string().uuid().nullable().optional(),
+  employeeId: z.coerce.number().int().positive().nullable().optional(),
 });
 
 function publicUser(user) {
@@ -96,7 +101,7 @@ router.patch(
   requirePermission("user:manage"),
   validateBody(updateUserSchema),
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const id = toId(req.params.id);
     const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "User not found" });
 
@@ -129,7 +134,7 @@ router.post(
   requirePermission("user:manage"),
   validateBody(resetPasswordSchema),
   asyncHandler(async (req, res) => {
-    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    const target = await prisma.user.findUnique({ where: { id: toId(req.params.id) } });
     if (!target) return res.status(404).json({ error: "User not found" });
 
     if (target.id === req.user.id) {

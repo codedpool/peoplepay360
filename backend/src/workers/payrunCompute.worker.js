@@ -28,7 +28,7 @@ const payrunComputeWorker = new Worker(
         actorUserId: actorUserId ?? null,
         action: "payrun.compute",
         entityType: "Payrun",
-        entityId: payrunId,
+        entityId: String(payrunId),
         before: { status: "DRAFT" },
         after: {
           status: "COMPUTED",

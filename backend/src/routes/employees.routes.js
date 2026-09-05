@@ -8,15 +8,20 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
   department: z.string().min(1),
   jobPosition: z.string().min(1),
-  managerId: z.string().uuid().nullable().optional(),
-  scheduleId: z.string().uuid().nullable().optional(),
+  managerId: z.coerce.number().int().positive().nullable().optional(),
+  scheduleId: z.coerce.number().int().positive().nullable().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   // No actual bank details are stored anywhere (out of scope) — this is only
   // the signal the Payroll Dashboard's "missing bank account" alert reads.
@@ -49,7 +54,7 @@ router.get(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const id = toId(req.params.id);
 
     if (!isElevated(req.user.roles)) {
       if (!assertOwnsOrElevated(req, res, id)) return;
@@ -81,7 +86,7 @@ router.patch(
   requirePermission("employee:write"),
   validateBody(updateEmployeeSchema),
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const id = toId(req.params.id);
     const existing = await prisma.employee.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Employee not found" });
 

@@ -7,8 +7,13 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { computeWeeklyHours } = require("../services/workingSchedule");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const patternEntrySchema = z.object({
   day: z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]),
@@ -46,7 +51,7 @@ router.get(
   requireAuth,
   requirePermission("schedule:read"),
   asyncHandler(async (req, res) => {
-    const schedule = await prisma.workingSchedule.findUnique({ where: { id: req.params.id } });
+    const schedule = await prisma.workingSchedule.findUnique({ where: { id: toId(req.params.id) } });
     if (!schedule) return res.status(404).json({ error: "Working schedule not found" });
     res.json(schedule);
   })
@@ -70,7 +75,7 @@ router.patch(
   requirePermission("schedule:write"),
   validateBody(updateScheduleSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.workingSchedule.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.workingSchedule.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Working schedule not found" });
 
     const data = { ...req.body };
@@ -78,7 +83,7 @@ router.patch(
       data.weeklyHours = computeWeeklyHours(data.pattern);
     }
 
-    const schedule = await prisma.workingSchedule.update({ where: { id: req.params.id }, data });
+    const schedule = await prisma.workingSchedule.update({ where: { id: toId(req.params.id) }, data });
     res.json(schedule);
   })
 );

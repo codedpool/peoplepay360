@@ -7,8 +7,13 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { applyAdminPasswordReset, MIN_PASSWORD_LENGTH } = require("../services/passwordReset");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 // The admin side of the "I forgot my password" flow raised from the login
 // screen (POST /api/auth/password-reset-requests). Same permission as User
@@ -71,7 +76,7 @@ router.post(
   validateBody(resolveSchema),
   asyncHandler(async (req, res) => {
     const request = await prisma.passwordResetRequest.findUnique({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       include: { user: true },
     });
     if (!request) return res.status(404).json({ error: "Password reset request not found" });
@@ -111,7 +116,7 @@ router.post(
   requireAuth,
   requirePermission("user:manage"),
   asyncHandler(async (req, res) => {
-    const request = await prisma.passwordResetRequest.findUnique({ where: { id: req.params.id } });
+    const request = await prisma.passwordResetRequest.findUnique({ where: { id: toId(req.params.id) } });
     if (!request) return res.status(404).json({ error: "Password reset request not found" });
     if (request.status !== "PENDING") {
       return res.status(409).json({ error: "This request has already been dealt with" });
@@ -129,7 +134,7 @@ router.post(
           actorUserId: req.user.id,
           action: "passwordResetRequest.reject",
           entityType: "PasswordResetRequest",
-          entityId: rejected.id,
+          entityId: String(rejected.id),
           before: { status: "PENDING" },
           after: { status: "REJECTED" },
         },

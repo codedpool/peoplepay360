@@ -10,15 +10,20 @@ const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
 const { orderedRangeRefinement } = require("../lib/dateRange");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const dateSchema = z.coerce.date();
 
 const createRequestSchema = z
   .object({
-    employeeId: z.string().uuid(),
-    timeOffTypeId: z.string().uuid(),
+    employeeId: z.coerce.number().int().positive(),
+    timeOffTypeId: z.coerce.number().int().positive(),
     startDate: dateSchema,
     endDate: dateSchema,
     duration: z.coerce.number().positive(),
@@ -60,8 +65,8 @@ router.get(
       where.employeeId = req.user.employeeId;
     } else if (!hasPermission(req.user.roles, "timeoff:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
-    } else if (req.query.employeeId) {
-      where.employeeId = req.query.employeeId;
+    } else if (toId(req.query.employeeId)) {
+      where.employeeId = toId(req.query.employeeId);
     }
 
     if (req.query.status) where.status = req.query.status;
@@ -79,7 +84,7 @@ router.get(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const request = await prisma.timeOffRequest.findUnique({ where: { id: req.params.id } });
+    const request = await prisma.timeOffRequest.findUnique({ where: { id: toId(req.params.id) } });
     if (!request) return res.status(404).json({ error: "Time off request not found" });
 
     if (!isElevated(req.user.roles)) {
@@ -141,7 +146,7 @@ router.post(
   "/:id/cancel",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffRequest.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffRequest.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Time off request not found" });
 
     if (existing.status === "PENDING") {
@@ -167,7 +172,7 @@ router.post(
         async (tx) => {
           // Re-read inside the transaction: the status checked above was read
           // before it opened, and an approval could have landed since.
-          const request = await tx.timeOffRequest.findUnique({ where: { id: req.params.id } });
+          const request = await tx.timeOffRequest.findUnique({ where: { id: toId(req.params.id) } });
           if (!request) {
             const err = new Error("Time off request not found");
             err.statusCode = 404;
@@ -193,8 +198,15 @@ router.post(
           }
 
           const cancelled = await tx.timeOffRequest.update({
-            where: { id: req.params.id },
-            data: { status: "CANCELLED", allocationId: null },
+            where: { id: toId(req.params.id) },
+            // Clears any pending cancellation request alongside the cancel
+            // itself — the ask has now been answered.
+            data: {
+              status: "CANCELLED",
+              allocationId: null,
+              cancellationRequested: false,
+              cancellationRequestedAt: null,
+            },
           });
 
           // Only the approval-tier reversal is audited. A pending withdrawal
@@ -206,7 +218,7 @@ router.post(
                 actorUserId: req.user.id,
                 action: "timeoff.cancelApproved",
                 entityType: "TimeOffRequest",
-                entityId: cancelled.id,
+                entityId: String(cancelled.id),
                 before: { status: "APPROVED", allocationId: request.allocationId },
                 after: { status: "CANCELLED", restored },
               },
@@ -240,6 +252,62 @@ router.post(
   })
 );
 
+// An employee can withdraw their own PENDING request outright, but an
+// APPROVED one has already moved their balance — letting them reverse that
+// unilaterally would let them hand themselves leave back. So they ask
+// instead: this flags the request for HR, who then use the existing
+// /cancel route (which requires timeoff:approve and restores the balance
+// properly). Nothing about the request's own status changes here.
+router.post(
+  "/:id/request-cancellation",
+  requireAuth,
+  validateBody(z.object({ reason: z.string().trim().min(1).max(500).optional() })),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.timeOffRequest.findUnique({ where: { id: toId(req.params.id) } });
+    if (!existing) return res.status(404).json({ error: "Time off request not found" });
+
+    // The employee whose leave it is, or someone acting for them.
+    if (!assertOwnsOrElevated(req, res, existing.employeeId)) return;
+
+    if (existing.status !== "APPROVED") {
+      return res.status(409).json({
+        error:
+          existing.status === "PENDING"
+            ? "A pending request can be withdrawn directly — no cancellation request needed"
+            : `A ${existing.status.toLowerCase()} request cannot be cancelled`,
+      });
+    }
+    if (existing.cancellationRequested) {
+      return res.status(409).json({ error: "Cancellation has already been requested for this leave" });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const request = await tx.timeOffRequest.update({
+        where: { id: toId(req.params.id) },
+        data: {
+          cancellationRequested: true,
+          cancellationReason: req.body.reason ?? null,
+          cancellationRequestedAt: new Date(),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: req.user.id,
+          action: "timeoff.requestCancellation",
+          entityType: "TimeOffRequest",
+          entityId: String(request.id),
+          before: { cancellationRequested: false },
+          after: { cancellationRequested: true, reason: request.cancellationReason },
+        },
+      });
+      return request;
+    });
+
+    await invalidateDashboardCache();
+    res.json(updated);
+  })
+);
+
 // Approval is the one write path that moves an Allocation balance. Everything
 // here runs inside a single serializable transaction: reload the allocation,
 // reload the request, and only commit remaining -= duration if the request is
@@ -255,7 +323,7 @@ router.post(
       const result = await prisma.$transaction(
         async (tx) => {
           const request = await tx.timeOffRequest.findUnique({
-            where: { id: req.params.id },
+            where: { id: toId(req.params.id) },
             include: { timeOffType: true },
           });
           if (!request) {
@@ -307,7 +375,7 @@ router.post(
           }
 
           const approved = await tx.timeOffRequest.update({
-            where: { id: req.params.id },
+            where: { id: toId(req.params.id) },
             data: { status: "APPROVED", allocationId: allocation?.id ?? null },
           });
 
@@ -316,7 +384,7 @@ router.post(
               actorUserId: req.user.id,
               action: "timeoff.approve",
               entityType: "TimeOffRequest",
-              entityId: approved.id,
+              entityId: String(approved.id),
               before: { status: "PENDING" },
               after: { status: "APPROVED", allocationId: allocation?.id ?? null },
             },
@@ -348,7 +416,7 @@ router.post(
   requireAuth,
   requirePermission("timeoff:approve"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffRequest.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffRequest.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Time off request not found" });
     if (existing.status !== "PENDING") {
       return res.status(409).json({ error: "Only a pending request can be refused" });
@@ -356,7 +424,7 @@ router.post(
 
     const request = await prisma.$transaction(async (tx) => {
       const refused = await tx.timeOffRequest.update({
-        where: { id: req.params.id },
+        where: { id: toId(req.params.id) },
         data: { status: "REFUSED" },
       });
 
@@ -365,7 +433,7 @@ router.post(
           actorUserId: req.user.id,
           action: "timeoff.refuse",
           entityType: "TimeOffRequest",
-          entityId: refused.id,
+          entityId: String(refused.id),
           before: { status: "PENDING" },
           after: { status: "REFUSED" },
         },

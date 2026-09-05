@@ -9,8 +9,13 @@ const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { deriveAttendanceFields } = require("../services/attendance");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const dateTimeSchema = z.coerce.date();
 
@@ -30,7 +35,7 @@ function checkOutAfterCheckIn(checkIn, checkOut) {
 // schedule (Section 7).
 const createAttendanceSchema = z
   .object({
-    employeeId: z.string().uuid(),
+    employeeId: z.coerce.number().int().positive(),
     checkIn: dateTimeSchema,
     checkOut: dateTimeSchema.nullable().optional(),
   })
@@ -72,8 +77,8 @@ router.get(
       where.employeeId = req.user.employeeId;
     } else if (!hasPermission(req.user.roles, "attendance:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
-    } else if (req.query.employeeId) {
-      where.employeeId = req.query.employeeId;
+    } else if (toId(req.query.employeeId)) {
+      where.employeeId = toId(req.query.employeeId);
     }
 
     if (req.query.status) where.status = req.query.status;
@@ -91,7 +96,7 @@ router.get(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const record = await prisma.attendance.findUnique({ where: { id: req.params.id } });
+    const record = await prisma.attendance.findUnique({ where: { id: toId(req.params.id) } });
     if (!record) return res.status(404).json({ error: "Attendance record not found" });
 
     if (!isElevated(req.user.roles)) {
@@ -143,7 +148,7 @@ router.patch(
   requireAuth,
   validateBody(z.object({ checkOut: dateTimeSchema })),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.attendance.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.attendance.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Attendance record not found" });
 
     if (!isElevated(req.user.roles)) {
@@ -161,7 +166,7 @@ router.patch(
 
     const schedule = await loadScheduleForEmployee(existing.employeeId);
     const record = await prisma.attendance.update({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       data: {
         checkOut: req.body.checkOut,
         ...deriveAttendanceFields({ checkIn: existing.checkIn, checkOut: req.body.checkOut, schedule }),
@@ -182,7 +187,7 @@ router.patch(
   requirePermission("attendance:correct"),
   validateBody(correctAttendanceSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.attendance.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.attendance.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Attendance record not found" });
 
     const checkIn = req.body.checkIn ?? existing.checkIn;
@@ -207,7 +212,7 @@ router.patch(
 
     const record = await prisma.$transaction(async (tx) => {
       const updated = await tx.attendance.update({
-        where: { id: req.params.id },
+        where: { id: toId(req.params.id) },
         data: {
           checkIn,
           checkOut,
@@ -221,7 +226,7 @@ router.patch(
           actorUserId: req.user.id,
           action: "attendance.correct",
           entityType: "Attendance",
-          entityId: updated.id,
+          entityId: String(updated.id),
           before,
           after: {
             checkIn: updated.checkIn,

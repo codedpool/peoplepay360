@@ -56,7 +56,7 @@ async function applyAdminPasswordReset({
         actorUserId,
         action: "user.resetPassword",
         entityType: "User",
-        entityId: targetUser.id,
+        entityId: String(targetUser.id),
         before: { mustChangePassword: targetUser.mustChangePassword },
         // Never the password itself, in either column — the audit log records
         // that a reset happened and who did it, not the credential.

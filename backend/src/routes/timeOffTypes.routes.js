@@ -5,8 +5,13 @@ const { requireAuth } = require("../middleware/auth");
 const { requirePermission } = require("../middleware/rbac");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const createTimeOffTypeSchema = z.object({
   name: z.string().min(1),
@@ -47,10 +52,10 @@ router.patch(
   requirePermission("timeoff:write"),
   validateBody(updateTimeOffTypeSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffType.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffType.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Time off type not found" });
 
-    const type = await prisma.timeOffType.update({ where: { id: req.params.id }, data: req.body });
+    const type = await prisma.timeOffType.update({ where: { id: toId(req.params.id) }, data: req.body });
     res.json(type);
   })
 );

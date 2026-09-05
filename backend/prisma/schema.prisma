@@ -99,11 +99,11 @@ enum PayslipStatus {
 }
 
 model User {
-  id                  String    @id @default(uuid())
+  id                  Int    @id @default(autoincrement())
   email               String    @unique
   passwordHash        String    @map("password_hash")
   roles               Role[]
-  employeeId          String?   @unique @map("employee_id")
+  employeeId          Int?   @unique @map("employee_id")
   employee            Employee? @relation(fields: [employeeId], references: [id])
   isActive            Boolean   @default(true) @map("is_active")
   // Set whenever an admin sets someone else's password (a direct reset, or by
@@ -134,13 +134,13 @@ model User {
 // the endpoint must answer identically either way or it becomes an account
 // enumeration oracle.
 model PasswordResetRequest {
-  id           String                     @id @default(uuid())
+  id           Int                     @id @default(autoincrement())
   email        String
-  userId       String?                    @map("user_id")
+  userId       Int?                    @map("user_id")
   user         User?                      @relation("PasswordResetSubject", fields: [userId], references: [id], onDelete: SetNull)
   note         String?
   status       PasswordResetRequestStatus @default(PENDING)
-  resolvedById String?                    @map("resolved_by_id")
+  resolvedById Int?                    @map("resolved_by_id")
   resolvedBy   User?                      @relation("PasswordResetResolver", fields: [resolvedById], references: [id])
   resolvedAt   DateTime?                  @map("resolved_at")
   createdAt    DateTime                   @default(now()) @map("created_at")
@@ -151,8 +151,8 @@ model PasswordResetRequest {
 }
 
 model RefreshToken {
-  id         String    @id @default(uuid())
-  userId     String    @map("user_id")
+  id         Int    @id @default(autoincrement())
+  userId     Int    @map("user_id")
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash  String    @unique @map("token_hash")
   familyId   String    @map("family_id")
@@ -166,8 +166,8 @@ model RefreshToken {
 }
 
 model AuditLog {
-  id           String   @id @default(uuid())
-  actorUserId  String?  @map("actor_user_id")
+  id           Int   @id @default(autoincrement())
+  actorUserId  Int?  @map("actor_user_id")
   actor        User?    @relation(fields: [actorUserId], references: [id])
   action       String
   entityType   String   @map("entity_type")
@@ -182,14 +182,14 @@ model AuditLog {
 }
 
 model Employee {
-  id            String         @id @default(uuid())
+  id            Int         @id @default(autoincrement())
   name          String
   department    String
-  managerId     String?        @map("manager_id")
+  managerId     Int?        @map("manager_id")
   manager       Employee?      @relation("EmployeeManager", fields: [managerId], references: [id])
   reports       Employee[]     @relation("EmployeeManager")
   jobPosition   String         @map("job_position")
-  scheduleId    String?        @map("schedule_id")
+  scheduleId    Int?        @map("schedule_id")
   schedule      WorkingSchedule? @relation(fields: [scheduleId], references: [id])
   status        EmployeeStatus @default(ACTIVE)
   // Payroll Dashboard's "missing bank account" alert needs a real signal to
@@ -211,8 +211,8 @@ model Employee {
 }
 
 model Contract {
-  id                String         @id @default(uuid())
-  employeeId        String         @map("employee_id")
+  id                Int         @id @default(autoincrement())
+  employeeId        Int         @map("employee_id")
   employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   startDate         DateTime       @map("start_date") @db.Date
   endDate           DateTime?      @map("end_date") @db.Date
@@ -222,7 +222,7 @@ model Contract {
   // employee; this column is instead consulted by payrunValidation's
   // structure_mismatch check, which flags when a Payrun computed an employee
   // against a different structure than their contract nominally specifies.
-  salaryStructureId String?        @map("salary_structure_id")
+  salaryStructureId Int?        @map("salary_structure_id")
   salaryStructure   SalaryStructure? @relation(fields: [salaryStructureId], references: [id])
   status            ContractStatus @default(DRAFT)
   createdAt         DateTime       @default(now()) @map("created_at")
@@ -235,7 +235,7 @@ model Contract {
 }
 
 model WorkingSchedule {
-  id          String       @id @default(uuid())
+  id          Int       @id @default(autoincrement())
   name        String
   type        ScheduleType
   weeklyHours Decimal      @map("weekly_hours") @db.Decimal(5, 2)
@@ -247,8 +247,8 @@ model WorkingSchedule {
 }
 
 model Attendance {
-  id                String            @id @default(uuid())
-  employeeId        String            @map("employee_id")
+  id                Int            @id @default(autoincrement())
+  employeeId        Int            @map("employee_id")
   employee          Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   checkIn           DateTime          @map("check_in")
   checkOut          DateTime?         @map("check_out")
@@ -270,7 +270,7 @@ model Attendance {
 }
 
 model TimeOffType {
-  id                String      @id @default(uuid())
+  id                Int      @id @default(autoincrement())
   name              String
   unit              TimeOffUnit
   requiresAllocation Boolean    @default(true) @map("requires_allocation")
@@ -285,10 +285,10 @@ model TimeOffType {
 }
 
 model TimeOffAllocation {
-  id            String            @id @default(uuid())
-  employeeId    String            @map("employee_id")
+  id            Int            @id @default(autoincrement())
+  employeeId    Int            @map("employee_id")
   employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  timeOffTypeId String            @map("time_off_type_id")
+  timeOffTypeId Int            @map("time_off_type_id")
   timeOffType   TimeOffType       @relation(fields: [timeOffTypeId], references: [id])
   allocated     Decimal           @db.Decimal(6, 2)
   taken         Decimal           @default(0) @db.Decimal(6, 2)
@@ -302,10 +302,10 @@ model TimeOffAllocation {
 }
 
 model TimeOffRequest {
-  id            String                @id @default(uuid())
-  employeeId    String                @map("employee_id")
+  id            Int                @id @default(autoincrement())
+  employeeId    Int                @map("employee_id")
   employee      Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  timeOffTypeId String                @map("time_off_type_id")
+  timeOffTypeId Int                @map("time_off_type_id")
   timeOffType   TimeOffType           @relation(fields: [timeOffTypeId], references: [id])
   startDate     DateTime              @map("start_date") @db.Date
   endDate       DateTime              @map("end_date") @db.Date
@@ -315,16 +315,25 @@ model TimeOffRequest {
   // time so a later cancellation can put the exact same balance back —
   // re-running the "which allocation covers these dates" lookup at cancel
   // time could resolve to a different row if allocations changed in between.
-  allocationId  String?               @map("allocation_id")
+  allocationId  Int?               @map("allocation_id")
+  // An employee can't cancel their own APPROVED leave (that would let them
+  // hand their own balance back), so instead they raise a request for HR to
+  // do it. Kept as fields on the request rather than a separate model: the
+  // request stays the single source of truth for its own lifecycle, and the
+  // approver queue is a filter on this one flag.
+  cancellationRequested   Boolean   @default(false) @map("cancellation_requested")
+  cancellationReason      String?   @map("cancellation_reason")
+  cancellationRequestedAt DateTime? @map("cancellation_requested_at")
   createdAt     DateTime              @default(now()) @map("created_at")
 
   @@index([employeeId])
   @@index([status])
+  @@index([cancellationRequested])
   @@map("time_off_requests")
 }
 
 model SalaryStructure {
-  id     String  @id @default(uuid())
+  id     Int  @id @default(autoincrement())
   name   String
   active Boolean @default(true)
 
@@ -336,8 +345,8 @@ model SalaryStructure {
 }
 
 model SalaryRule {
-  id                String            @id @default(uuid())
-  salaryStructureId String            @map("salary_structure_id")
+  id                Int            @id @default(autoincrement())
+  salaryStructureId Int            @map("salary_structure_id")
   salaryStructure   SalaryStructure   @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
   name              String
   code              String
@@ -353,9 +362,9 @@ model SalaryRule {
 }
 
 model Payrun {
-  id                String          @id @default(uuid())
+  id                Int          @id @default(autoincrement())
   name              String
-  salaryStructureId String          @map("salary_structure_id")
+  salaryStructureId Int          @map("salary_structure_id")
   salaryStructure   SalaryStructure @relation(fields: [salaryStructureId], references: [id])
   periodStart       DateTime        @map("period_start") @db.Date
   periodEnd         DateTime        @map("period_end") @db.Date
@@ -369,8 +378,8 @@ model Payrun {
 }
 
 model Payslip {
-  id          String        @id @default(uuid())
-  payrunId    String        @map("payrun_id")
+  id          Int        @id @default(autoincrement())
+  payrunId    Int        @map("payrun_id")
   payrun      Payrun        @relation(fields: [payrunId], references: [id], onDelete: Cascade)
   // Deliberately denormalized: employeeId is technically derivable via
   // contractId -> Contract.employeeId, but is kept as its own direct column
@@ -379,9 +388,9 @@ model Payslip {
   // it can't be expressed across a join, and (2) every ownership check
   // (an Employee viewing their own payslips) reads this column directly on
   // what is otherwise a very hot read path.
-  employeeId  String        @map("employee_id")
+  employeeId  Int        @map("employee_id")
   employee    Employee      @relation(fields: [employeeId], references: [id])
-  contractId  String        @map("contract_id")
+  contractId  Int        @map("contract_id")
   contract    Contract      @relation(fields: [contractId], references: [id])
   status      PayslipStatus @default(DRAFT)
   workedDays  Decimal       @map("worked_days") @db.Decimal(5, 2)
@@ -395,10 +404,10 @@ model Payslip {
 }
 
 model PayslipLine {
-  id           String     @id @default(uuid())
-  payslipId    String     @map("payslip_id")
+  id           Int     @id @default(autoincrement())
+  payslipId    Int     @map("payslip_id")
   payslip      Payslip    @relation(fields: [payslipId], references: [id], onDelete: Cascade)
-  salaryRuleId String     @map("salary_rule_id")
+  salaryRuleId Int     @map("salary_rule_id")
   salaryRule   SalaryRule @relation(fields: [salaryRuleId], references: [id])
   amount       Decimal    @db.Decimal(12, 2)
 

@@ -11,8 +11,13 @@ const { payrunComputeQueue, payslipEmailQueue } = require("../lib/queue");
 const { validatePayrun } = require("../services/payrunValidation");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
 const { orderedRangeRefinement } = require("../lib/dateRange");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const dateSchema = z.coerce.date();
 
@@ -25,10 +30,10 @@ const dateSchema = z.coerce.date();
 const createPayrunSchema = z
   .object({
     name: z.string().min(1),
-    salaryStructureId: z.string().uuid(),
+    salaryStructureId: z.coerce.number().int().positive(),
     periodStart: dateSchema,
     periodEnd: dateSchema,
-    employeeIds: z.array(z.string().uuid()).min(1),
+    employeeIds: z.array(z.coerce.number().int().positive()).min(1),
   })
   .refine(
     ...orderedRangeRefinement(
@@ -142,7 +147,7 @@ router.get(
   requirePermission("payrun:read"),
   asyncHandler(async (req, res) => {
     const payrun = await prisma.payrun.findUnique({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       include: {
         salaryStructure: true,
         payslips: { include: { employee: true, lines: { include: { salaryRule: true } } } },
@@ -181,9 +186,9 @@ router.post(
   requireAuth,
   requirePermission("payrun:write"),
   computeLimiter,
-  validateBody(z.object({ employeeIds: z.array(z.string().uuid()).min(1) })),
+  validateBody(z.object({ employeeIds: z.array(z.coerce.number().int().positive()).min(1) })),
   asyncHandler(async (req, res) => {
-    const payrun = await prisma.payrun.findUnique({ where: { id: req.params.id } });
+    const payrun = await prisma.payrun.findUnique({ where: { id: toId(req.params.id) } });
     if (!payrun) return res.status(404).json({ error: "Payrun not found" });
     if (payrun.status !== "DRAFT" && payrun.status !== "COMPUTED") {
       return res.status(409).json({ error: `Cannot compute a Payrun in ${payrun.status} status` });
@@ -219,7 +224,7 @@ router.post(
   requireAuth,
   requirePermission("payrun:write"),
   asyncHandler(async (req, res) => {
-    const payrun = await prisma.payrun.findUnique({ where: { id: req.params.id } });
+    const payrun = await prisma.payrun.findUnique({ where: { id: toId(req.params.id) } });
     if (!payrun) return res.status(404).json({ error: "Payrun not found" });
     if (payrun.status !== "COMPUTED" && payrun.status !== "VALIDATED") {
       return res.status(409).json({ error: `Cannot validate a Payrun in ${payrun.status} status` });
@@ -236,7 +241,7 @@ router.post(
           actorUserId: req.user.id,
           action: "payrun.validate",
           entityType: "Payrun",
-          entityId: payrun.id,
+          entityId: String(payrun.id),
           before: { status: payrun.status },
           after: { status: nextStatus, findings },
         },
@@ -253,7 +258,7 @@ router.post(
   requireAuth,
   requirePermission("payrun:write"),
   asyncHandler(async (req, res) => {
-    const payrun = await prisma.payrun.findUnique({ where: { id: req.params.id } });
+    const payrun = await prisma.payrun.findUnique({ where: { id: toId(req.params.id) } });
     if (!payrun) return res.status(404).json({ error: "Payrun not found" });
     if (payrun.status !== "VALIDATED") {
       return res.status(409).json({ error: "Only a validated Payrun can be marked paid" });
@@ -267,7 +272,7 @@ router.post(
           actorUserId: req.user.id,
           action: "payrun.mark_paid",
           entityType: "Payrun",
-          entityId: payrun.id,
+          entityId: String(payrun.id),
           before: { status: "VALIDATED" },
           after: { status: "PAID" },
         },
@@ -288,7 +293,7 @@ router.post(
   requirePermission("payrun:write"),
   asyncHandler(async (req, res) => {
     const payrun = await prisma.payrun.findUnique({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       include: { payslips: true },
     });
     if (!payrun) return res.status(404).json({ error: "Payrun not found" });
@@ -310,7 +315,7 @@ router.post(
           actorUserId: req.user.id,
           action: "payrun.send_payslips",
           entityType: "Payrun",
-          entityId: payrun.id,
+          entityId: String(payrun.id),
           before: { status: "PAID" },
           after: { status: "SENT", jobCount: jobs.length },
         },

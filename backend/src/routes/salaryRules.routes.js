@@ -6,8 +6,14 @@ const { requirePermission } = require("../middleware/rbac");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { evaluateFormula } = require("../services/formulaEvaluator");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router({ mergeParams: true });
+
+// This router nests under a structure, so its id params are named rather
+// than plain :id. Same rule: a non-numeric id is a 404, not a 500.
+router.param("structureId", validateIdParam);
+router.param("ruleId", validateIdParam);
 
 const RULE_CATEGORIES = ["BASIC", "ALLOWANCE", "GROSS", "DEDUCTION", "NET"];
 const COMPUTATION_METHODS = ["FIXED", "PERCENTAGE", "FORMULA"];
@@ -27,7 +33,7 @@ const updateRuleSchema = createRuleSchema.partial();
 // A structure's rules are read/written by whoever manages the structure —
 // no separate mount path, this router is mounted at /api/salary-structures/:structureId/rules.
 async function loadStructure(req, res) {
-  const structure = await prisma.salaryStructure.findUnique({ where: { id: req.params.structureId } });
+  const structure = await prisma.salaryStructure.findUnique({ where: { id: toId(req.params.structureId) } });
   if (!structure) {
     res.status(404).json({ error: "Salary structure not found" });
     return null;
@@ -110,7 +116,7 @@ router.patch(
     if (!structure) return;
 
     const existing = await prisma.salaryRule.findFirst({
-      where: { id: req.params.ruleId, salaryStructureId: structure.id },
+      where: { id: toId(req.params.ruleId), salaryStructureId: structure.id },
     });
     if (!existing) return res.status(404).json({ error: "Salary rule not found in this structure" });
 
@@ -145,7 +151,7 @@ router.delete(
     if (!structure) return;
 
     const existing = await prisma.salaryRule.findFirst({
-      where: { id: req.params.ruleId, salaryStructureId: structure.id },
+      where: { id: toId(req.params.ruleId), salaryStructureId: structure.id },
     });
     if (!existing) return res.status(404).json({ error: "Salary rule not found in this structure" });
 

@@ -6,8 +6,13 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { payslipPdfQueue } = require("../lib/queue");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 // Any HR-tier role may read/print any payslip; an Employee only their own —
 // same ownership pattern as attendance/time-off, no separate payslip:read
@@ -21,10 +26,10 @@ router.get(
 
     if (!isElevated(req.user.roles)) {
       where.employeeId = req.user.employeeId;
-    } else if (req.query.employeeId) {
-      where.employeeId = req.query.employeeId;
+    } else if (toId(req.query.employeeId)) {
+      where.employeeId = toId(req.query.employeeId);
     }
-    if (req.query.payrunId) where.payrunId = req.query.payrunId;
+    if (toId(req.query.payrunId)) where.payrunId = toId(req.query.payrunId);
     if (req.query.status) where.status = req.query.status;
 
     const [data, total] = await Promise.all([
@@ -47,7 +52,7 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const payslip = await prisma.payslip.findUnique({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       include: { employee: true, contract: true, payrun: true, lines: { include: { salaryRule: true } } },
     });
     if (!payslip) return res.status(404).json({ error: "Payslip not found" });
@@ -67,7 +72,7 @@ router.post(
   "/:id/print",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const payslip = await prisma.payslip.findUnique({ where: { id: req.params.id } });
+    const payslip = await prisma.payslip.findUnique({ where: { id: toId(req.params.id) } });
     if (!payslip) return res.status(404).json({ error: "Payslip not found" });
 
     if (!isElevated(req.user.roles)) {
@@ -83,7 +88,7 @@ router.get(
   "/:id/print/:jobId",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const payslip = await prisma.payslip.findUnique({ where: { id: req.params.id } });
+    const payslip = await prisma.payslip.findUnique({ where: { id: toId(req.params.id) } });
     if (!payslip) return res.status(404).json({ error: "Payslip not found" });
 
     if (!isElevated(req.user.roles)) {

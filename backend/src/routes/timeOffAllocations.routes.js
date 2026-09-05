@@ -9,16 +9,21 @@ const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
 const { isOrderedRange, orderedRangeRefinement } = require("../lib/dateRange");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const dateSchema = z.coerce.date();
 const DATE_ORDER_MESSAGE = "An allocation's valid-to date cannot be before its valid-from date";
 
 const createAllocationSchema = z
   .object({
-    employeeId: z.string().uuid(),
-    timeOffTypeId: z.string().uuid(),
+    employeeId: z.coerce.number().int().positive(),
+    timeOffTypeId: z.coerce.number().int().positive(),
     allocated: z.coerce.number().nonnegative(),
     validFrom: dateSchema,
     validTo: dateSchema,
@@ -49,8 +54,8 @@ router.get(
       where.employeeId = req.user.employeeId;
     } else if (!hasPermission(req.user.roles, "timeoff:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
-    } else if (req.query.employeeId) {
-      where.employeeId = req.query.employeeId;
+    } else if (toId(req.query.employeeId)) {
+      where.employeeId = toId(req.query.employeeId);
     }
 
     const [data, total] = await Promise.all([
@@ -66,7 +71,7 @@ router.get(
   "/:id",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const allocation = await prisma.timeOffAllocation.findUnique({ where: { id: req.params.id } });
+    const allocation = await prisma.timeOffAllocation.findUnique({ where: { id: toId(req.params.id) } });
     if (!allocation) return res.status(404).json({ error: "Allocation not found" });
 
     if (!isElevated(req.user.roles)) {
@@ -100,7 +105,7 @@ router.patch(
   requirePermission("timeoff:write"),
   validateBody(updateAllocationSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
 
     // Moving one end of the validity window still has to leave it ordered —
@@ -120,7 +125,7 @@ router.patch(
       data.remaining = Number(existing.remaining) + delta;
     }
 
-    const allocation = await prisma.timeOffAllocation.update({ where: { id: req.params.id }, data });
+    const allocation = await prisma.timeOffAllocation.update({ where: { id: toId(req.params.id) }, data });
     await invalidateDashboardCache();
     res.json(allocation);
   })
@@ -131,14 +136,14 @@ router.post(
   requireAuth,
   requirePermission("timeoff:approve"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
     if (existing.status !== "PENDING") {
       return res.status(409).json({ error: `Cannot approve an allocation in ${existing.status} status` });
     }
 
     const allocation = await prisma.timeOffAllocation.update({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       data: { status: "ACTIVE" },
     });
     await invalidateDashboardCache();
@@ -151,14 +156,14 @@ router.post(
   requireAuth,
   requirePermission("timeoff:approve"),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.timeOffAllocation.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
     if (existing.status !== "PENDING") {
       return res.status(409).json({ error: `Cannot refuse an allocation in ${existing.status} status` });
     }
 
     const allocation = await prisma.timeOffAllocation.update({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       data: { status: "REFUSED" },
     });
     res.json(allocation);

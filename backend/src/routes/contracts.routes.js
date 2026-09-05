@@ -8,18 +8,23 @@ const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
 const { isOrderedRange, orderedRangeRefinement } = require("../lib/dateRange");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const dateSchema = z.coerce.date();
 const DATE_ORDER_MESSAGE = "A contract's end date cannot be before its start date";
 
 const contractFields = z.object({
-  employeeId: z.string().uuid(),
+  employeeId: z.coerce.number().int().positive(),
   startDate: dateSchema,
   endDate: dateSchema.nullable().optional(),
   wage: z.coerce.number().positive(),
-  salaryStructureId: z.string().uuid().nullable().optional(),
+  salaryStructureId: z.coerce.number().int().positive().nullable().optional(),
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"]).optional(),
 });
 
@@ -50,7 +55,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { page, pageSize, skip, take } = parsePagination(req.query);
     const where = {};
-    if (req.query.employeeId) where.employeeId = req.query.employeeId;
+    if (toId(req.query.employeeId)) where.employeeId = toId(req.query.employeeId);
     if (req.query.status) where.status = req.query.status;
 
     const [data, total] = await Promise.all([
@@ -67,7 +72,7 @@ router.get(
   requireAuth,
   requirePermission("contract:read"),
   asyncHandler(async (req, res) => {
-    const contract = await prisma.contract.findUnique({ where: { id: req.params.id } });
+    const contract = await prisma.contract.findUnique({ where: { id: toId(req.params.id) } });
     if (!contract) return res.status(404).json({ error: "Contract not found" });
     res.json(contract);
   })
@@ -100,7 +105,7 @@ router.patch(
   requirePermission("contract:write"),
   validateBody(updateContractSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.contract.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contract.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Contract not found" });
 
     // Moving only one end of the range still has to leave the range ordered —
@@ -113,7 +118,7 @@ router.patch(
     }
 
     try {
-      const contract = await prisma.contract.update({ where: { id: req.params.id }, data: req.body });
+      const contract = await prisma.contract.update({ where: { id: toId(req.params.id) }, data: req.body });
       await invalidateDashboardCache();
       res.json(contract);
     } catch (err) {

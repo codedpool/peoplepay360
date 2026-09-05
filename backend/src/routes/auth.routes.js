@@ -182,7 +182,7 @@ router.post(
         actorUserId: user.id,
         action: "user.changePassword",
         entityType: "User",
-        entityId: user.id,
+        entityId: String(user.id),
         before: { mustChangePassword: user.mustChangePassword },
         after: { mustChangePassword: false },
       },

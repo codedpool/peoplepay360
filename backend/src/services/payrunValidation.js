@@ -19,7 +19,7 @@ const { prisma } = require("../lib/prisma");
 // compute.
 async function loadUnresolvedEmployeeIds(payrunId) {
   const entry = await prisma.auditLog.findFirst({
-    where: { entityType: "Payrun", entityId: payrunId, action: "payrun.compute" },
+    where: { entityType: "Payrun", entityId: String(payrunId), action: "payrun.compute" },
     orderBy: { createdAt: "desc" },
   });
   return entry?.after?.unresolvedEmployeeIds ?? [];

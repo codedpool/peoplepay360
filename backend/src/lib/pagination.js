@@ -1,5 +1,9 @@
 const DEFAULT_PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 100;
+// Raised from 100 so that lookup fetches (employees, time-off types) used to
+// resolve a foreign key into a display name can pull the whole set in one
+// request. At 100 with ~100 seeded employees, any row past the first page
+// resolved to no name and the raw id leaked into the table instead.
+const MAX_PAGE_SIZE = 500;
 
 function parsePagination(query) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);

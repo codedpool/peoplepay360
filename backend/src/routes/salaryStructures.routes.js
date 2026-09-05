@@ -6,8 +6,13 @@ const { requirePermission } = require("../middleware/rbac");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { toId, validateIdParam } = require("../lib/ids");
 
 const router = express.Router();
+
+// A non-numeric :id is a resource that cannot exist -> 404, not a 500 out
+// of Prisma. See lib/ids.js.
+router.param("id", validateIdParam);
 
 const createStructureSchema = z.object({
   name: z.string().min(1),
@@ -67,7 +72,7 @@ router.get(
   requirePermission("salarystructure:read"),
   asyncHandler(async (req, res) => {
     const structure = await prisma.salaryStructure.findUnique({
-      where: { id: req.params.id },
+      where: { id: toId(req.params.id) },
       include: { rules: { orderBy: { sequence: "asc" } } },
     });
     if (!structure) return res.status(404).json({ error: "Salary structure not found" });
@@ -92,10 +97,10 @@ router.patch(
   requirePermission("salarystructure:write"),
   validateBody(updateStructureSchema),
   asyncHandler(async (req, res) => {
-    const existing = await prisma.salaryStructure.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.salaryStructure.findUnique({ where: { id: toId(req.params.id) } });
     if (!existing) return res.status(404).json({ error: "Salary structure not found" });
 
-    const structure = await prisma.salaryStructure.update({ where: { id: req.params.id }, data: req.body });
+    const structure = await prisma.salaryStructure.update({ where: { id: toId(req.params.id) }, data: req.body });
     res.json(structure);
   })
 );
