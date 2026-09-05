@@ -10,6 +10,7 @@ const { makeLimiter } = require("../middleware/rateLimiters");
 const { payrunComputeQueue, payslipEmailQueue } = require("../lib/queue");
 const { validatePayrun } = require("../services/payrunValidation");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
+const { orderedRangeRefinement } = require("../lib/dateRange");
 
 const router = express.Router();
 
@@ -19,13 +20,23 @@ const dateSchema = z.coerce.date();
 // selection) collapsed into one call for now. Track A's two-step wizard
 // (Stage 5.1) can call this same endpoint once its own UI collects the same
 // fields; this route doesn't assume anything about how that selection UI works.
-const createPayrunSchema = z.object({
-  name: z.string().min(1),
-  salaryStructureId: z.string().uuid(),
-  periodStart: dateSchema,
-  periodEnd: dateSchema,
-  employeeIds: z.array(z.string().uuid()).min(1),
-});
+// A backwards period isn't just untidy here — countScheduledWorkingDays()
+// would walk zero days, making every payslip in the run prorate to nothing.
+const createPayrunSchema = z
+  .object({
+    name: z.string().min(1),
+    salaryStructureId: z.string().uuid(),
+    periodStart: dateSchema,
+    periodEnd: dateSchema,
+    employeeIds: z.array(z.string().uuid()).min(1),
+  })
+  .refine(
+    ...orderedRangeRefinement(
+      "periodStart",
+      "periodEnd",
+      "A payrun's period end cannot be before its period start"
+    )
+  );
 
 // Expensive operation, naturally throttled further by running as a queued
 // job — still rate limited itself so the trigger endpoint can't be spammed
@@ -74,6 +85,13 @@ router.get(
         periodEnd: dateSchema,
         search: z.string().min(1).optional(),
       })
+      .refine(
+        ...orderedRangeRefinement(
+          "periodStart",
+          "periodEnd",
+          "A payrun's period end cannot be before its period start"
+        )
+      )
       .safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({ error: "Validation failed", issues: parsed.error.issues });

@@ -7,12 +7,14 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
+const { isOrderedRange, orderedRangeRefinement } = require("../lib/dateRange");
 
 const router = express.Router();
 
 const dateSchema = z.coerce.date();
+const DATE_ORDER_MESSAGE = "A contract's end date cannot be before its start date";
 
-const createContractSchema = z.object({
+const contractFields = z.object({
   employeeId: z.string().uuid(),
   startDate: dateSchema,
   endDate: dateSchema.nullable().optional(),
@@ -21,7 +23,18 @@ const createContractSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"]).optional(),
 });
 
-const updateContractSchema = createContractSchema.partial().omit({ employeeId: true });
+const createContractSchema = contractFields.refine(
+  ...orderedRangeRefinement("startDate", "endDate", DATE_ORDER_MESSAGE)
+);
+
+// .partial() has to be taken off the bare object — a refined schema is a
+// ZodEffects wrapper with no .partial(). The PATCH shape can only order the
+// dates the request actually carried anyway, so the merged pair is re-checked
+// against the stored row in the handler below.
+const updateContractSchema = contractFields
+  .partial()
+  .omit({ employeeId: true })
+  .refine(...orderedRangeRefinement("startDate", "endDate", DATE_ORDER_MESSAGE));
 
 // Postgres reports the overlap constraint as a plain exclusion-violation error,
 // not one of Prisma's specifically-coded errors — translate it to a clean 409
@@ -89,6 +102,15 @@ router.patch(
   asyncHandler(async (req, res) => {
     const existing = await prisma.contract.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Contract not found" });
+
+    // Moving only one end of the range still has to leave the range ordered —
+    // pushing startDate past a stored endDate is the same bug as sending both
+    // out of order, and the schema can't see the stored half.
+    const startDate = req.body.startDate ?? existing.startDate;
+    const endDate = req.body.endDate !== undefined ? req.body.endDate : existing.endDate;
+    if (!isOrderedRange(startDate, endDate)) {
+      return res.status(400).json({ error: DATE_ORDER_MESSAGE });
+    }
 
     try {
       const contract = await prisma.contract.update({ where: { id: req.params.id }, data: req.body });

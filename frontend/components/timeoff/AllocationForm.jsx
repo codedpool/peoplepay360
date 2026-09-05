@@ -16,8 +16,14 @@ export default function AllocationForm({ employees, types, submitting = false, e
   const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10));
   const [validTo, setValidTo] = useState(todayPlusYear());
 
+  // A window that runs backwards can never be matched by the approval lookup,
+  // so the allocation would silently be unusable. Blocked here as well as
+  // server-side.
+  const datesInverted = Boolean(validTo) && Boolean(validFrom) && validTo < validFrom;
+
   function handleSubmit(e) {
     e.preventDefault();
+    if (datesInverted) return;
     onSubmit({ employeeId, timeOffTypeId, allocated: Number(allocated), validFrom, validTo });
   }
 
@@ -69,7 +75,17 @@ export default function AllocationForm({ employees, types, submitting = false, e
         </div>
         <div className="field-group">
           <label className="field-label">Valid to</label>
-          <input type="date" required className="field num" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
+          <input
+            type="date"
+            required
+            min={validFrom || undefined}
+            className="field num"
+            value={validTo}
+            onChange={(e) => setValidTo(e.target.value)}
+          />
+          {datesInverted && (
+            <p className="text-[0.75rem] text-stamp mt-1">Valid-to can&apos;t be before valid-from.</p>
+          )}
         </div>
       </div>
 
@@ -81,7 +97,7 @@ export default function AllocationForm({ employees, types, submitting = false, e
             Cancel
           </button>
         )}
-        <button type="submit" disabled={submitting} className="btn-primary">
+        <button type="submit" disabled={submitting || datesInverted} className="btn-primary">
           {submitting ? "Saving…" : "Grant allocation"}
         </button>
       </div>

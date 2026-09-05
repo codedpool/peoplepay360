@@ -30,8 +30,15 @@ export default function ContractForm({
   const [salaryStructureId, setSalaryStructureId] = useState(initial?.salaryStructureId ?? "");
   const [status, setStatus] = useState(initial?.status ?? "DRAFT");
 
+  // The API rejects an inverted range too, but the browser shouldn't let it be
+  // typed in the first place: `min` blocks the picker, and the explicit check
+  // covers a value typed straight into the field, which `min` alone doesn't
+  // stop in every browser.
+  const datesInverted = Boolean(endDate) && endDate < startDate;
+
   function handleSubmit(e) {
     e.preventDefault();
+    if (datesInverted) return;
     onSubmit({
       ...(mode === "create" ? { employeeId } : {}),
       startDate,
@@ -74,7 +81,16 @@ export default function ContractForm({
         </div>
         <div className="field-group">
           <label className="field-label">End date</label>
-          <input type="date" className="field num" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <input
+            type="date"
+            min={startDate || undefined}
+            className="field num"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          {datesInverted && (
+            <p className="text-[0.75rem] text-stamp mt-1">End date can&apos;t be before the start date.</p>
+          )}
         </div>
         <div className="field-group">
           <label className="field-label">Wage / month</label>
@@ -119,7 +135,7 @@ export default function ContractForm({
             Cancel
           </button>
         )}
-        <button type="submit" disabled={submitting} className="btn-primary">
+        <button type="submit" disabled={submitting || datesInverted} className="btn-primary">
           {submitting ? "Saving…" : submitLabel}
         </button>
       </div>

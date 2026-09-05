@@ -8,29 +8,35 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { invalidateDashboardCache } = require("../lib/dashboardCache");
+const { isOrderedRange, orderedRangeRefinement } = require("../lib/dateRange");
 
 const router = express.Router();
 
 const dateSchema = z.coerce.date();
+const DATE_ORDER_MESSAGE = "An allocation's valid-to date cannot be before its valid-from date";
 
-const createAllocationSchema = z.object({
-  employeeId: z.string().uuid(),
-  timeOffTypeId: z.string().uuid(),
-  allocated: z.coerce.number().nonnegative(),
-  validFrom: dateSchema,
-  validTo: dateSchema,
-});
+const createAllocationSchema = z
+  .object({
+    employeeId: z.string().uuid(),
+    timeOffTypeId: z.string().uuid(),
+    allocated: z.coerce.number().nonnegative(),
+    validFrom: dateSchema,
+    validTo: dateSchema,
+  })
+  .refine(...orderedRangeRefinement("validFrom", "validTo", DATE_ORDER_MESSAGE));
 
 // `taken`/`remaining` are deliberately not client-writable here — they only move
 // via the atomic approval-deduction flow (Phase 3), never a direct edit on this route.
 // `status` here is limited to EXPIRED — moving to/from PENDING/ACTIVE/REFUSED goes
 // through the dedicated approve/refuse actions below, not a free-form field edit.
-const updateAllocationSchema = z.object({
-  allocated: z.coerce.number().nonnegative().optional(),
-  validFrom: dateSchema.optional(),
-  validTo: dateSchema.optional(),
-  status: z.enum(["EXPIRED"]).optional(),
-});
+const updateAllocationSchema = z
+  .object({
+    allocated: z.coerce.number().nonnegative().optional(),
+    validFrom: dateSchema.optional(),
+    validTo: dateSchema.optional(),
+    status: z.enum(["EXPIRED"]).optional(),
+  })
+  .refine(...orderedRangeRefinement("validFrom", "validTo", DATE_ORDER_MESSAGE));
 
 router.get(
   "/",
@@ -96,6 +102,17 @@ router.patch(
   asyncHandler(async (req, res) => {
     const existing = await prisma.timeOffAllocation.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Allocation not found" });
+
+    // Moving one end of the validity window still has to leave it ordered —
+    // the schema above can only compare the halves the request carried.
+    if (
+      !isOrderedRange(
+        req.body.validFrom ?? existing.validFrom,
+        req.body.validTo ?? existing.validTo
+      )
+    ) {
+      return res.status(400).json({ error: DATE_ORDER_MESSAGE });
+    }
 
     const data = { ...req.body };
     if (data.allocated !== undefined) {
