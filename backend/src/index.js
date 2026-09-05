@@ -3,9 +3,11 @@ const helmet = require("helmet");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const pinoHttp = require("pino-http");
+const swaggerUi = require("swagger-ui-express");
 const { env } = require("./lib/env");
 const { prisma } = require("./lib/prisma");
 const { redis } = require("./lib/redis");
+const { openapiSpec } = require("./docs/openapi");
 const authRoutes = require("./routes/auth.routes");
 const employeeRoutes = require("./routes/employees.routes");
 const contractRoutes = require("./routes/contracts.routes");
@@ -51,6 +53,21 @@ app.use("/api/salary-structures", salaryStructureRoutes);
 app.use("/api/salary-structures/:structureId/rules", salaryRuleRoutes);
 app.use("/api/payruns", payrunRoutes);
 app.use("/api/payslips", payslipRoutes);
+
+// Swagger UI at /api-docs — the global helmet() CSP above blocks its inline
+// script (script-src 'self', no 'unsafe-inline'). helmet has no per-path
+// "unset" for an already-applied header, so it's removed explicitly here,
+// scoped to this one path; every real /api/* route above keeps the strict
+// default CSP untouched.
+app.use(
+  "/api-docs",
+  (_req, res, next) => {
+    res.removeHeader("Content-Security-Policy");
+    next();
+  },
+  swaggerUi.serve,
+  swaggerUi.setup(openapiSpec)
+);
 
 // Centralized error handler — catches anything asyncHandler forwards via next(err)
 // so an unexpected failure returns a clean 500 instead of crashing the process.
