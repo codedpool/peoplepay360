@@ -3,7 +3,7 @@ const { env } = require("./env");
 
 function signAccessToken(user) {
   return jwt.sign(
-    { sub: user.id, roles: user.roles, employeeId: user.employeeId ?? null },
+    { sub: user.id, email: user.email, roles: user.roles, employeeId: user.employeeId ?? null },
     env.jwtAccessSecret,
     { expiresIn: env.jwtAccessTtl }
   );

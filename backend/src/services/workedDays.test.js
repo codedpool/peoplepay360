@@ -68,4 +68,21 @@ describe("computeWorkedDays", () => {
     const days = await computeWorkedDays(employeeId, new Date("2025-06-01"), new Date("2025-06-30"));
     expect(days).toBe(0);
   });
+
+  // periodEnd (@db.Date) is midnight at the *start* of the last day — a
+  // daytime check-in on that same calendar day must still count.
+  it("counts a completed day that falls on the period's last calendar day", async () => {
+    const employeeId = await makeEmployee();
+    await prisma.attendance.create({
+      data: {
+        employeeId,
+        checkIn: new Date("2025-06-30T09:00:00Z"),
+        checkOut: new Date("2025-06-30T17:00:00Z"),
+        status: "PRESENT",
+      },
+    });
+
+    const days = await computeWorkedDays(employeeId, new Date("2025-06-01"), new Date("2025-06-30"));
+    expect(days).toBe(1);
+  });
 });

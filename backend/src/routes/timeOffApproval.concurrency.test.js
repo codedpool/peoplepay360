@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 
 const createdEmployeeIds = [];
+const createdTimeOffTypeIds = [];
 
 async function makeEmployee() {
   const employee = await prisma.employee.create({
@@ -65,6 +66,9 @@ describe("time off approval concurrency", () => {
     for (const id of createdEmployeeIds) {
       await prisma.employee.delete({ where: { id } }).catch(() => {});
     }
+    for (const id of createdTimeOffTypeIds) {
+      await prisma.timeOffType.delete({ where: { id } }).catch(() => {});
+    }
     await prisma.$disconnect();
   });
 
@@ -73,6 +77,7 @@ describe("time off approval concurrency", () => {
     const timeOffType = await prisma.timeOffType.create({
       data: { name: `PTO ${crypto.randomUUID()}`, unit: "DAYS", requiresAllocation: true },
     });
+    createdTimeOffTypeIds.push(timeOffType.id);
     const allocation = await prisma.timeOffAllocation.create({
       data: {
         employeeId,
