@@ -25,47 +25,52 @@
     @apply font-mono tabular-nums;
   }
 
-  /* Underline-style field, evokes filling in a paper form. */
+  /* Bordered, rounded field — pairs with an icon prefix in some forms. */
   .field {
-    @apply w-full bg-transparent border-0 border-b border-line px-0 py-1.5 text-[0.9rem] text-ink
-      placeholder:text-fade/60 focus:outline-none focus:border-ledger transition-colors;
+    @apply w-full bg-panel border border-line rounded-lg px-3 py-2 text-[0.9rem] text-ink
+      placeholder:text-fade/70 focus:outline-none focus:ring-2 focus:ring-ledger/20 focus:border-ledger
+      transition-colors;
   }
   .field-label {
-    @apply block text-[0.72rem] uppercase tracking-wide text-fade mb-1;
+    @apply block text-[0.78rem] font-medium text-ink/80 mb-1.5;
   }
   .field-group {
     @apply flex flex-col gap-1;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 text-[0.85rem] font-medium px-3.5 py-2
+    @apply inline-flex items-center justify-center gap-1.5 text-[0.85rem] font-medium px-4 py-2.5 rounded-lg
       transition-colors disabled:opacity-40 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply btn bg-ledger text-paper hover:bg-ledger-dark;
+    @apply btn bg-ledger text-white hover:bg-ledger-dark shadow-sm shadow-ledger/20;
   }
   .btn-secondary {
-    @apply btn border border-line text-ink hover:border-ink;
+    @apply btn border border-line bg-panel text-ink hover:border-ink/30 hover:bg-paper;
   }
   .btn-danger {
-    @apply btn border border-stamp text-stamp hover:bg-stamp hover:text-paper;
+    @apply btn border border-stamp text-stamp hover:bg-stamp hover:text-white;
   }
   .btn-ghost {
     @apply btn text-fade hover:text-ink;
   }
 
-  /* Rubber-stamp status marker: double ring, slight tilt, not a soft pill. */
+  /* Soft pill status marker with a leading dot in the tone color. */
   .stamp {
-    @apply inline-flex items-center justify-center text-[0.68rem] font-semibold uppercase tracking-wide
-      px-2 py-0.5 border rounded-sm -rotate-1 leading-tight;
+    @apply inline-flex items-center gap-1.5 text-[0.72rem] font-medium px-2.5 py-1 rounded-full leading-tight;
   }
-  .stamp-approved { @apply stamp border-approved text-approved bg-approved-light; }
-  .stamp-pending { @apply stamp border-seal text-seal bg-seal-light; }
-  .stamp-blocking { @apply stamp border-stamp text-stamp bg-stamp-light; }
-  .stamp-neutral { @apply stamp border-fade/50 text-fade bg-panel; }
+  .stamp::before {
+    content: "";
+    @apply w-[6px] h-[6px] rounded-full shrink-0;
+    background: currentColor;
+  }
+  .stamp-approved { @apply stamp text-approved bg-approved-light; }
+  .stamp-pending { @apply stamp text-seal bg-seal-light; }
+  .stamp-blocking { @apply stamp text-stamp bg-stamp-light; }
+  .stamp-neutral { @apply stamp text-fade bg-paper; }
 
   .panel {
-    @apply bg-panel border border-line;
+    @apply bg-panel border border-line rounded-2xl shadow-sm shadow-ink/[0.03];
   }
 
   /* No text-left here on purpose — that's the browser default for table
@@ -76,6 +81,11 @@
     @apply w-full text-[0.85rem];
     border-collapse: separate;
     border-spacing: 0;
+    /* Centered by default so a header lines up with the values under it —
+       inherited by every th/td, but a lower layer than the .text-left/
+       .text-right utilities used per-column, so those still win where a
+       column is deliberately left- or right-aligned. */
+    text-align: center;
   }
   /* Horizontal padding lives here, once, instead of on every th/td in every
      page — border-collapse previously merged cell borders AND left cells with
@@ -99,13 +109,13 @@
      this rule only sets the shared type/spacing, so a .text-right on an
      individual header or cell isn't fighting a more specific selector here. */
   .ledger-table thead th {
-    @apply text-[0.72rem] uppercase tracking-wide text-fade font-medium py-2 border-b border-line;
+    @apply text-[0.72rem] uppercase tracking-wide text-fade font-medium py-3 border-b border-line;
   }
   .ledger-table tbody td {
-    @apply py-2.5 border-b border-line/70;
+    @apply py-3 border-b border-line/70 align-middle;
   }
   .ledger-table tbody tr:hover {
-    @apply bg-panel;
+    @apply bg-ledger-light/40;
   }
 
   .register-strip {
