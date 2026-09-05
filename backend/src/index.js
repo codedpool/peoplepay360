@@ -15,6 +15,8 @@ const timeOffAllocationRoutes = require("./routes/timeOffAllocations.routes");
 const timeOffRequestRoutes = require("./routes/timeOffRequests.routes");
 const attendanceRoutes = require("./routes/attendance.routes");
 const userRoutes = require("./routes/users.routes");
+const salaryStructureRoutes = require("./routes/salaryStructures.routes");
+const salaryRuleRoutes = require("./routes/salaryRules.routes");
 
 const app = express();
 
@@ -43,6 +45,8 @@ app.use("/api/timeoff-allocations", timeOffAllocationRoutes);
 app.use("/api/timeoff-requests", timeOffRequestRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/salary-structures", salaryStructureRoutes);
+app.use("/api/salary-structures/:structureId/rules", salaryRuleRoutes);
 
 // Centralized error handler — catches anything asyncHandler forwards via next(err)
 // so an unexpected failure returns a clean 500 instead of crashing the process.
