@@ -1,5 +1,7 @@
 plan.md
 docker-compose.override.yml
+*Interview Prep*.md
+Ride-Pooling Backend*.md
 
 node_modules/
 dist/
