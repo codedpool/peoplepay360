@@ -82,7 +82,12 @@ function computeDayFraction({ checkIn, checkOut, schedule }) {
 // describe the arrival while hiding that essentially no day was worked. Within
 // the full-day band the original LATE-then-OVERTIME-then-PRESENT order stands.
 function deriveStatus({ checkIn, checkOut, schedule }) {
-  if (!checkOut) return "MISSING_CHECKOUT";
+  // Still clocked in: the day is in progress, so it reads as PRESENT rather
+  // than MISSING_CHECKOUT. Nothing is wrong yet — the employee is at work and
+  // simply hasn't left. The short-day verdict below is deliberately deferred
+  // until there's an actual check-out to measure, at which point a day that
+  // never cleared the half-day bar becomes ABSENT.
+  if (!checkOut) return "PRESENT";
 
   const worked = workedMinutesOf(checkIn, checkOut);
   const fullDay = fullDayMinutes(schedule);

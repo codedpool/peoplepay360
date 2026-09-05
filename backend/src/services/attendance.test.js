@@ -116,10 +116,21 @@ describe("computeDayFraction", () => {
 });
 
 describe("deriveStatus", () => {
-  it("is MISSING_CHECKOUT while the session is open", () => {
+  it("is PRESENT while the session is still open", () => {
     const { checkIn } = monday(9, 0, 17, 0);
-    expect(deriveStatus({ checkIn, checkOut: null, schedule: FULL_TIME_SCHEDULE })).toBe(
-      "MISSING_CHECKOUT"
+    expect(deriveStatus({ checkIn, checkOut: null, schedule: FULL_TIME_SCHEDULE })).toBe("PRESENT");
+  });
+
+  // The short-day verdict waits for a real check-out: an employee who is still
+  // clocked in reads PRESENT no matter how little time has passed, and only
+  // becomes ABSENT once they check out below the half-day bar.
+  it("turns an open PRESENT day into ABSENT once it is closed under the half-day bar", () => {
+    const { checkIn } = monday(9, 0, 17, 0);
+    expect(deriveStatus({ checkIn, checkOut: null, schedule: FULL_TIME_SCHEDULE })).toBe("PRESENT");
+
+    const earlyCheckOut = new Date(2025, 5, 2, 11, 0, 0); // 2h of an 8h day
+    expect(deriveStatus({ checkIn, checkOut: earlyCheckOut, schedule: FULL_TIME_SCHEDULE })).toBe(
+      "ABSENT"
     );
   });
 
@@ -169,6 +180,6 @@ describe("deriveAttendanceFields", () => {
       checkOut: null,
       schedule: FULL_TIME_SCHEDULE,
     });
-    expect(open).toMatchObject({ status: "MISSING_CHECKOUT", dayFraction: 0, workedHours: null });
+    expect(open).toMatchObject({ status: "PRESENT", dayFraction: 0, workedHours: null });
   });
 });

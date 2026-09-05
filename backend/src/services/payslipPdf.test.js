@@ -81,6 +81,6 @@ describe("renderPayslipPdf", () => {
   });
 
   it("throws for a payslip id that doesn't exist", async () => {
-    await expect(renderPayslipPdf("00000000-0000-0000-0000-000000000000")).rejects.toThrow(/not found/);
+    await expect(renderPayslipPdf(999999999)).rejects.toThrow(/not found/);
   });
 });
