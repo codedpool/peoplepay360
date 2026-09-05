@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ErrorNote from "../ui/ErrorNote";
-import { ROLE_LABELS } from "../../lib/permissions";
-import { suggestEmail, generatePassword } from "../../lib/credentials";
 
 const EMPTY = {
   department: "",
@@ -13,7 +11,6 @@ const EMPTY = {
   status: "ACTIVE",
   bankAccountOnFile: false,
 };
-const ROLE_VALUES = Object.keys(ROLE_LABELS);
 
 // Employee.name is one column in the schema — split only at the UI edge, so
 // editing an existing employee still shows separate First/Last inputs.
@@ -22,16 +19,15 @@ function splitName(fullName) {
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
 }
 
-// `onSubmit` always receives `{ employee, credentials }` — `credentials` is
-// null unless `withLogin` is on and the admin left "create login access" checked.
+// Employee creation is data entry only — it never provisions a login. The
+// `{ employee, credentials }` submit shape is kept (with `credentials` always
+// null) because the pages calling this still destructure it.
 export default function EmployeeForm({
   initial,
   employees = [],
   schedules = [],
   excludeId,
   showStatus = false,
-  withLogin = false,
-  existingEmails,
   submitLabel = "Save",
   submitting = false,
   error,
@@ -42,24 +38,9 @@ export default function EmployeeForm({
   const [values, setValues] = useState({ ...EMPTY, ...initial });
   const [firstName, setFirstName] = useState(initialFirst);
   const [lastName, setLastName] = useState(initialLast);
-  const [createLogin, setCreateLogin] = useState(true);
-  const [email, setEmail] = useState("");
-  const [emailTouched, setEmailTouched] = useState(false);
-  const [password, setPassword] = useState(() => (withLogin ? generatePassword() : ""));
-  const [roles, setRoles] = useState(["EMPLOYEE"]);
-
-  // Keep the suggested email in sync with the name fields until the admin edits it directly.
-  useEffect(() => {
-    if (!withLogin || emailTouched) return;
-    setEmail(firstName || lastName ? suggestEmail(firstName, lastName, existingEmails ?? new Set()) : "");
-  }, [withLogin, firstName, lastName, emailTouched, existingEmails]);
 
   function set(field, value) {
     setValues((v) => ({ ...v, [field]: value }));
-  }
-
-  function toggleRole(role) {
-    setRoles((r) => (r.includes(role) ? r.filter((x) => x !== role) : [...r, role]));
   }
 
   function handleSubmit(e) {
@@ -73,8 +54,7 @@ export default function EmployeeForm({
       bankAccountOnFile: values.bankAccountOnFile,
       ...(showStatus ? { status: values.status } : {}),
     };
-    const credentials = withLogin && createLogin ? { email, password, roles } : null;
-    onSubmit({ employee, credentials });
+    onSubmit({ employee, credentials: null });
   }
 
   const managerOptions = employees.filter((e) => e.id !== excludeId);
@@ -154,70 +134,6 @@ export default function EmployeeForm({
         Bank account on file
       </label>
 
-      {withLogin && (
-        <div className="panel px-4 py-4">
-          <label className="flex items-center gap-2 text-[0.85rem] font-medium mb-1">
-            <input type="checkbox" checked={createLogin} onChange={(e) => setCreateLogin(e.target.checked)} />
-            Create login access
-          </label>
-          <p className="text-[0.78rem] text-fade mb-4">
-            An Employee record alone can&apos;t sign in — this also creates their account. Uncheck this for
-            someone who shouldn&apos;t get system access (e.g. a contractor).
-          </p>
-
-          {createLogin && (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-5">
-                <div className="field-group">
-                  <label className="field-label">Login email</label>
-                  <input
-                    type="email"
-                    required
-                    className="field"
-                    value={email}
-                    onChange={(e) => {
-                      setEmailTouched(true);
-                      setEmail(e.target.value);
-                    }}
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Temporary password</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="field num"
-                      required
-                      minLength={8}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="text-[0.78rem] text-ledger hover:text-ledger-dark shrink-0"
-                      onClick={() => setPassword(generatePassword())}
-                    >
-                      Regenerate
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <p className="field-label mb-2">Roles</p>
-                <div className="flex flex-wrap gap-x-5 gap-y-2">
-                  {ROLE_VALUES.map((role) => (
-                    <label key={role} className="flex items-center gap-1.5 text-[0.85rem]">
-                      <input type="checkbox" checked={roles.includes(role)} onChange={() => toggleRole(role)} />
-                      {ROLE_LABELS[role]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       <ErrorNote>{error}</ErrorNote>
 
       <div className="flex items-center gap-3 justify-end pt-1">
@@ -226,11 +142,7 @@ export default function EmployeeForm({
             Cancel
           </button>
         )}
-        <button
-          type="submit"
-          disabled={submitting || (withLogin && createLogin && roles.length === 0)}
-          className="btn-primary"
-        >
+        <button type="submit" disabled={submitting} className="btn-primary">
           {submitting ? "Saving…" : submitLabel}
         </button>
       </div>

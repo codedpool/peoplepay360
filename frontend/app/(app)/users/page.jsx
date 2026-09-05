@@ -44,8 +44,8 @@ export default function UsersPage() {
     setLoadError(null);
     try {
       const [usersRes, employeesRes, resetsRes] = await Promise.all([
-        api.get("/api/users?pageSize=100"),
-        api.get("/api/employees?pageSize=100"),
+        api.get("/api/users?pageSize=500"),
+        api.get("/api/employees?pageSize=500"),
         api.get("/api/password-reset-requests?status=PENDING&pageSize=50"),
       ]);
       setUsers(usersRes.data);
@@ -154,14 +154,13 @@ export default function UsersPage() {
 
   return (
     <div>
+      {/* No "New user" action: accounts are not created from this page. This
+          page manages the accounts that already exist — role changes and
+          password resets — which is what the reset-request queue below is
+          for. */}
       <PageHeader
         title="Users"
-        description="Login access and role assignment — separate from the Employee record itself."
-        action={
-          <button className="btn-primary" onClick={() => setModal({ mode: "create" })}>
-            + New user
-          </button>
-        }
+        description="Role assignment and password resets for existing login accounts."
       />
 
       <ErrorNote>{actionError}</ErrorNote>

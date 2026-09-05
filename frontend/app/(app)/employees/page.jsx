@@ -36,9 +36,9 @@ export default function EmployeesPage() {
     setLoadError(null);
     try {
       const [employeesRes, schedulesRes, usersRes] = await Promise.all([
-        api.get("/api/employees?pageSize=100"),
-        canReadSchedules ? api.get("/api/schedules?pageSize=100") : Promise.resolve({ data: [] }),
-        canManageUsers ? api.get("/api/users?pageSize=100") : Promise.resolve({ data: [] }),
+        api.get("/api/employees?pageSize=500"),
+        canReadSchedules ? api.get("/api/schedules?pageSize=500") : Promise.resolve({ data: [] }),
+        canManageUsers ? api.get("/api/users?pageSize=500") : Promise.resolve({ data: [] }),
       ]);
       setEmployees(employeesRes.data);
       setSchedules(schedulesRes.data);
@@ -204,8 +204,6 @@ export default function EmployeesPage() {
           <EmployeeForm
             employees={employees}
             schedules={schedules}
-            withLogin={canManageUsers}
-            existingEmails={existingEmails}
             submitLabel="Create employee"
             submitting={submitting}
             error={formError}
