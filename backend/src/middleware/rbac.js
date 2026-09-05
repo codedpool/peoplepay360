@@ -54,10 +54,19 @@ const PERMISSIONS = {
   ],
 };
 
-function hasPermission(role, permission) {
-  const granted = PERMISSIONS[role];
-  if (!granted) return false;
-  return granted.includes("*") || granted.includes(permission);
+// A user can hold multiple roles (mockup: "assign one or more roles") — grant
+// the permission if ANY of their roles carries it.
+function hasPermission(roles, permission) {
+  const roleList = Array.isArray(roles) ? roles : [roles];
+  return roleList.some((role) => {
+    const granted = PERMISSIONS[role];
+    return granted && (granted.includes("*") || granted.includes(permission));
+  });
+}
+
+function isElevated(roles) {
+  const roleList = Array.isArray(roles) ? roles : [roles];
+  return roleList.some((role) => role !== "EMPLOYEE");
 }
 
 function requirePermission(permission) {
@@ -65,11 +74,11 @@ function requirePermission(permission) {
     if (!req.user) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    if (!hasPermission(req.user.role, permission)) {
+    if (!hasPermission(req.user.roles, permission)) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
     next();
   };
 }
 
-module.exports = { PERMISSIONS, hasPermission, requirePermission };
+module.exports = { PERMISSIONS, hasPermission, isElevated, requirePermission };
