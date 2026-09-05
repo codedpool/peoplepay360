@@ -10,6 +10,7 @@ const {
 } = require("../lib/refreshToken");
 const { validateBody } = require("../middleware/validate");
 const { authLimiter } = require("../middleware/rateLimiters");
+const { asyncHandler } = require("../lib/asyncHandler");
 const { env } = require("../lib/env");
 
 const router = express.Router();
@@ -31,7 +32,7 @@ function publicUser(user) {
   return { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId };
 }
 
-router.post("/login", authLimiter, validateBody(loginSchema), async (req, res) => {
+router.post("/login", authLimiter, validateBody(loginSchema), asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   const user = await prisma.user.findUnique({ where: { email } });
@@ -69,9 +70,9 @@ router.post("/login", authLimiter, validateBody(loginSchema), async (req, res) =
 
   res.cookie(REFRESH_COOKIE, rawToken, cookieOptions);
   res.json({ accessToken, user: publicUser(user) });
-});
+}));
 
-router.post("/refresh", authLimiter, async (req, res) => {
+router.post("/refresh", authLimiter, asyncHandler(async (req, res) => {
   const rawToken = req.cookies?.[REFRESH_COOKIE];
   if (!rawToken) {
     return res.status(401).json({ error: "Missing refresh token" });
@@ -92,15 +93,15 @@ router.post("/refresh", authLimiter, async (req, res) => {
   const accessToken = signAccessToken(user);
   res.cookie(REFRESH_COOKIE, result.rawToken, cookieOptions);
   res.json({ accessToken });
-});
+}));
 
-router.post("/logout", async (req, res) => {
+router.post("/logout", asyncHandler(async (req, res) => {
   const rawToken = req.cookies?.[REFRESH_COOKIE];
   if (rawToken) {
     await revokeRefreshTokenFamily(rawToken);
   }
   res.clearCookie(REFRESH_COOKIE, cookieOptions);
   res.json({ status: "ok" });
-});
+}));
 
 module.exports = router;
