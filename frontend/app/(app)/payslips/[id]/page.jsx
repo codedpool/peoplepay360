@@ -8,14 +8,12 @@ import { printPayslip } from "../../../../lib/pdf";
 import EmptyState from "../../../../components/ui/EmptyState";
 import ErrorNote from "../../../../components/ui/ErrorNote";
 import Stamp from "../../../../components/ui/Stamp";
+import { formatCurrency } from "../../../../lib/currency";
 
 const STATUS_TONE = { DRAFT: "neutral", COMPUTED: "pending", VALIDATED: "pending", PAID: "approved", SENT: "approved" };
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString();
-}
-function formatMoney(v) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(v));
 }
 
 // One payslip detail page for everybody, replacing the separate /me/payslips/[id].
@@ -107,7 +105,7 @@ export default function PayslipDetailPage() {
             <tr key={line.id}>
               <td className="font-medium">{line.salaryRule.name}</td>
               <td className="text-fade">{line.salaryRule.category}</td>
-              <td className="num text-right">{formatMoney(line.amount)}</td>
+              <td className="num text-right">{formatCurrency(line.amount)}</td>
             </tr>
           ))}
         </tbody>

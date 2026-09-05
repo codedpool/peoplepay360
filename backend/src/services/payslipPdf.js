@@ -10,8 +10,15 @@ function sanitizeLine(value) {
   return String(value ?? "").replace(/[\r\n\t]/g, " ").trim();
 }
 
+// "Rs." rather than the ₹ glyph on purpose: pdf-lib's StandardFonts are
+// WinAnsi-encoded and have no code point for ₹, so embedding it throws at
+// draw time. Rendering the rupee symbol in the PDF would mean shipping and
+// subsetting a Unicode TTF — not worth it for a two-character label. The
+// on-screen UI (lib/currency.js) uses the real ₹ symbol.
+//
+// Grouping is en-IN to match the currency (1,20,000.00, not 120,000.00).
 function formatMoney(amount) {
-  return Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `Rs. ${Number(amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // Renders one Payslip to a PDF buffer. Loads its own data by id rather than

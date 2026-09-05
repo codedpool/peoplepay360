@@ -9,14 +9,12 @@ import Modal from "../../../components/ui/Modal";
 import EmptyState from "../../../components/ui/EmptyState";
 import Stamp from "../../../components/ui/Stamp";
 import ContractForm from "../../../components/contracts/ContractForm";
+import { formatCurrency } from "../../../lib/currency";
 
 const STATUS_TONE = { ACTIVE: "approved", DRAFT: "pending", EXPIRED: "neutral", CANCELLED: "blocking" };
 
 function formatDate(d) {
   return d ? new Date(d).toLocaleDateString() : "—";
-}
-function formatMoney(v) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(v));
 }
 
 export default function ContractsPage() {
@@ -48,8 +46,8 @@ export default function ContractsPage() {
       if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
       const [contractsRes, employeesRes, structuresRes] = await Promise.all([
         api.get(`/api/contracts?${params}`),
-        api.get("/api/employees?pageSize=100"),
-        canReadStructures ? api.get("/api/salary-structures?pageSize=100") : Promise.resolve({ data: [] }),
+        api.get("/api/employees?pageSize=500"),
+        canReadStructures ? api.get("/api/salary-structures?pageSize=500") : Promise.resolve({ data: [] }),
       ]);
       setContracts(contractsRes.data);
       setEmployees(employeesRes.data);
@@ -156,7 +154,7 @@ export default function ContractsPage() {
                 <td className="font-medium">{employeeById[c.employeeId]?.name ?? "—"}</td>
                 <td className="num">{formatDate(c.startDate)}</td>
                 <td className="num">{formatDate(c.endDate)}</td>
-                <td className="num text-right">{formatMoney(c.wage)}</td>
+                <td className="num text-right">{formatCurrency(c.wage)}</td>
                 <td className="text-fade">{c.salaryStructureId ? structureNameById[c.salaryStructureId] ?? "—" : "—"}</td>
                 <td>
                   <Stamp tone={STATUS_TONE[c.status]}>{c.status}</Stamp>

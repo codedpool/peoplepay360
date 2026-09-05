@@ -11,6 +11,7 @@ import ErrorNote from "../../../../components/ui/ErrorNote";
 import Stamp from "../../../../components/ui/Stamp";
 import EligibleEmployeesPicker from "../../../../components/payruns/EligibleEmployeesPicker";
 import { pollJob, printPayslip as downloadPayslipPdf } from "../../../../lib/pdf";
+import { formatCurrency } from "../../../../lib/currency";
 
 const STATUS_TONE = {
   DRAFT: "neutral",
@@ -23,9 +24,6 @@ const STATUS_TONE = {
 
 function formatDate(d) {
   return new Date(d).toLocaleDateString();
-}
-function formatMoney(v) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(v));
 }
 function netAmount(payslip) {
   const line = payslip.lines.find((l) => l.salaryRule.category === "NET");
@@ -224,7 +222,7 @@ export default function PayrunDetailPage() {
               <tr key={p.id}>
                 <td className="font-medium">{p.employee.name}</td>
                 <td className="num text-right">{Number(p.workedDays)}</td>
-                <td className="num text-right">{netAmount(p) !== null ? formatMoney(netAmount(p)) : "—"}</td>
+                <td className="num text-right">{netAmount(p) !== null ? formatCurrency(netAmount(p)) : "—"}</td>
                 <td>
                   <Stamp tone={STATUS_TONE[p.status] ?? "neutral"}>{p.status}</Stamp>
                 </td>

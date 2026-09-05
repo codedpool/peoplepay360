@@ -4,10 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "../../lib/api";
 import EmptyState from "../ui/EmptyState";
 import Pagination from "../ui/Pagination";
+import { formatCurrency } from "../../lib/currency";
 
-function formatMoney(v) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(v));
-}
 
 // Mirrors the backend's own eligibility rule (an ACTIVE contract covering the
 // whole period) rather than showing "all employees minus some filtered out" —
@@ -83,7 +81,7 @@ export default function EligibleEmployeesPicker({ periodStart, periodEnd, select
                 <input type="checkbox" checked={selectedSet.has(r.employeeId)} onChange={() => toggle(r.employeeId)} />
                 <span className="flex-1 text-[0.85rem]">{r.name}</span>
                 <span className="text-[0.78rem] text-fade">{r.department}</span>
-                <span className="num text-[0.8rem] text-fade w-20 text-right">{formatMoney(r.wage)}</span>
+                <span className="num text-[0.8rem] text-fade w-20 text-right">{formatCurrency(r.wage)}</span>
               </label>
             ))}
           </div>

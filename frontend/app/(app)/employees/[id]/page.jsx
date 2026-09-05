@@ -10,6 +10,7 @@ import Stamp from "../../../../components/ui/Stamp";
 import EmployeeForm from "../../../../components/employees/EmployeeForm";
 import EmptyState from "../../../../components/ui/EmptyState";
 import ErrorNote from "../../../../components/ui/ErrorNote";
+import { formatCurrency } from "../../../../lib/currency";
 
 const CONTRACT_TONE = { ACTIVE: "approved", DRAFT: "pending", EXPIRED: "neutral", CANCELLED: "blocking" };
 const ATTENDANCE_TONE = { PRESENT: "approved", OVERTIME: "approved", LATE: "pending", MISSING_CHECKOUT: "pending", ABSENT: "blocking" };
@@ -30,9 +31,6 @@ function formatDate(d) {
 }
 function formatDateTime(d) {
   return d ? new Date(d).toLocaleString() : "—";
-}
-function formatMoney(v) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(Number(v));
 }
 
 function SectionHeader({ title, viewAllHref }) {
@@ -82,8 +80,8 @@ export default function EmployeeDetailPage() {
       const [emp, employeesRes, schedulesRes, contractsRes, attendanceRes, allocationsRes, requestsRes, typesRes] =
         await Promise.all([
           api.get(`/api/employees/${id}`),
-          api.get("/api/employees?pageSize=100"),
-          canReadSchedules ? api.get("/api/schedules?pageSize=100") : Promise.resolve({ data: [] }),
+          api.get("/api/employees?pageSize=500"),
+          canReadSchedules ? api.get("/api/schedules?pageSize=500") : Promise.resolve({ data: [] }),
           canReadContracts ? api.get(`/api/contracts?employeeId=${id}&pageSize=10`) : Promise.resolve(null),
           canReadAttendance ? api.get(`/api/attendance?employeeId=${id}&pageSize=10`) : Promise.resolve(null),
           canReadTimeOff ? api.get(`/api/timeoff-allocations?employeeId=${id}&pageSize=20`) : Promise.resolve(null),
@@ -230,7 +228,7 @@ export default function EmployeeDetailPage() {
                   <tr key={c.id}>
                     <td className="num">{formatDate(c.startDate)}</td>
                     <td className="num">{formatDate(c.endDate)}</td>
-                    <td className="num text-right">{formatMoney(c.wage)}</td>
+                    <td className="num text-right">{formatCurrency(c.wage)}</td>
                     <td>
                       <Stamp tone={CONTRACT_TONE[c.status]}>{c.status}</Stamp>
                     </td>
