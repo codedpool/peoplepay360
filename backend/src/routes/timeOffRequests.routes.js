@@ -3,7 +3,7 @@ const { z } = require("zod");
 const { Prisma } = require("@prisma/client");
 const { prisma } = require("../lib/prisma");
 const { requireAuth } = require("../middleware/auth");
-const { requirePermission, hasPermission } = require("../middleware/rbac");
+const { requirePermission, hasPermission, isElevated } = require("../middleware/rbac");
 const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
@@ -28,9 +28,9 @@ router.get(
     const { page, pageSize, skip, take } = parsePagination(req.query);
     const where = {};
 
-    if (req.user.role === "EMPLOYEE") {
+    if (!isElevated(req.user.roles)) {
       where.employeeId = req.user.employeeId;
-    } else if (!hasPermission(req.user.role, "timeoff:read")) {
+    } else if (!hasPermission(req.user.roles, "timeoff:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
     } else if (req.query.employeeId) {
       where.employeeId = req.query.employeeId;
@@ -54,9 +54,9 @@ router.get(
     const request = await prisma.timeOffRequest.findUnique({ where: { id: req.params.id } });
     if (!request) return res.status(404).json({ error: "Time off request not found" });
 
-    if (req.user.role === "EMPLOYEE") {
+    if (!isElevated(req.user.roles)) {
       if (!assertOwnsOrElevated(req, res, request.employeeId)) return;
-    } else if (!hasPermission(req.user.role, "timeoff:read")) {
+    } else if (!hasPermission(req.user.roles, "timeoff:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
@@ -73,9 +73,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { employeeId } = req.body;
 
-    if (req.user.role === "EMPLOYEE") {
+    if (!isElevated(req.user.roles)) {
       if (!assertOwnsOrElevated(req, res, employeeId)) return;
-    } else if (!hasPermission(req.user.role, "timeoff:write")) {
+    } else if (!hasPermission(req.user.roles, "timeoff:write")) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
@@ -94,9 +94,9 @@ router.post(
     const existing = await prisma.timeOffRequest.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Time off request not found" });
 
-    if (req.user.role === "EMPLOYEE") {
+    if (!isElevated(req.user.roles)) {
       if (!assertOwnsOrElevated(req, res, existing.employeeId)) return;
-    } else if (!hasPermission(req.user.role, "timeoff:write")) {
+    } else if (!hasPermission(req.user.roles, "timeoff:write")) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
