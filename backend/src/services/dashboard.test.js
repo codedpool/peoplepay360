@@ -61,6 +61,16 @@ describe("dashboard aggregates", () => {
   afterAll(async () => {
     for (const id of createdPayrunIds) await prisma.payrun.delete({ where: { id } }).catch(() => {});
     for (const id of createdStructureIds) await prisma.salaryStructure.delete({ where: { id } }).catch(() => {});
+    // Allocations/Requests referencing these types must go first — Postgres
+    // rejects deleting a TimeOffType that's still referenced by either, and
+    // the .catch(() => {}) below was silently swallowing that FK violation,
+    // leaving both the type AND its orphaned allocation/request rows behind
+    // on every single test run (this is why "CL <uuid>"/"LWP <uuid>" rows
+    // kept reappearing in real seeded databases).
+    for (const id of createdTimeOffTypeIds) {
+      await prisma.timeOffRequest.deleteMany({ where: { timeOffTypeId: id } }).catch(() => {});
+      await prisma.timeOffAllocation.deleteMany({ where: { timeOffTypeId: id } }).catch(() => {});
+    }
     for (const id of createdTimeOffTypeIds) await prisma.timeOffType.delete({ where: { id } }).catch(() => {});
     for (const id of createdEmployeeIds) await prisma.employee.delete({ where: { id } }).catch(() => {});
     await prisma.$disconnect();
