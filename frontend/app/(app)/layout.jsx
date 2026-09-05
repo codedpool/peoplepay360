@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import Nav from "../../components/shell/Nav";
+import Topbar from "../../components/shell/Topbar";
 
 export default function AppLayout({ children }) {
   const { user, status, elevated, mustChangePassword, logout } = useAuth();
@@ -45,7 +46,10 @@ export default function AppLayout({ children }) {
   return (
     <div className="min-h-screen flex bg-paper">
       <Nav />
-      <main className="flex-1 min-w-0 px-9 py-8">{children}</main>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Topbar />
+        <main className="flex-1 min-w-0 px-9 py-8">{children}</main>
+      </div>
     </div>
   );
 }

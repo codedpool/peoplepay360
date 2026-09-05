@@ -79,6 +79,7 @@ export function homeRouteFor(user) {
   // rejects every other call with 428 until it's done, so landing anywhere
   // else would just render a page full of errors.
   if (user.mustChangePassword) return "/change-password";
+  if (hasPermission(user.roles, "dashboard:read")) return "/dashboard";
   return isElevated(user.roles) ? "/employees" : "/me";
 }
 
