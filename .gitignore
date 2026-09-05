@@ -16,3 +16,7 @@ npm-debug.log*
 
 .DS_Store
 Thumbs.db
+
+# Full-resolution mockup export is too large for git history (~13MB) — the
+# cropped/downscaled sections in frontend/mockup/ are the committed reference instead.
+frontend/HRMS OXP - 24 hours.png

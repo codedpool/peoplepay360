@@ -29,7 +29,7 @@ const loginSchema = z.object({
 });
 
 function publicUser(user) {
-  return { id: user.id, email: user.email, role: user.role, employeeId: user.employeeId };
+  return { id: user.id, email: user.email, roles: user.roles, employeeId: user.employeeId };
 }
 
 router.post("/login", authLimiter, validateBody(loginSchema), asyncHandler(async (req, res) => {

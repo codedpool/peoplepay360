@@ -2,7 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const { prisma } = require("../lib/prisma");
 const { requireAuth } = require("../middleware/auth");
-const { requirePermission, hasPermission } = require("../middleware/rbac");
+const { requirePermission, hasPermission, isElevated } = require("../middleware/rbac");
 const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
@@ -47,9 +47,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    if (req.user.role === "EMPLOYEE") {
+    if (!isElevated(req.user.roles)) {
       if (!assertOwnsOrElevated(req, res, id)) return;
-    } else if (!hasPermission(req.user.role, "employee:read")) {
+    } else if (!hasPermission(req.user.roles, "employee:read")) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 

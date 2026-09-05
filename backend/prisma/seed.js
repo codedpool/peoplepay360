@@ -77,16 +77,17 @@ async function main() {
   const passwordHash = await bcrypt.hash(demoPassword, 12);
 
   const users = [
-    { email: "alice@peoplepay360.dev", role: "EMPLOYEE", employeeId: alice.id },
-    { email: "bob@peoplepay360.dev", role: "EMPLOYEE", employeeId: bob.id },
-    { email: "carla.hrmanager@peoplepay360.dev", role: "HR_MANAGER", employeeId: carla.id },
-    { email: "dave.payrolluser@peoplepay360.dev", role: "HR_PAYROLL_USER", employeeId: dave.id },
-    { email: "payroll.manager@peoplepay360.dev", role: "HR_PAYROLL_MANAGER", employeeId: null },
-    { email: "admin@peoplepay360.dev", role: "ADMIN", employeeId: null },
+    { email: "alice@peoplepay360.dev", roles: ["EMPLOYEE"], employeeId: alice.id },
+    { email: "bob@peoplepay360.dev", roles: ["EMPLOYEE"], employeeId: bob.id },
+    { email: "carla.hrmanager@peoplepay360.dev", roles: ["HR_MANAGER"], employeeId: carla.id },
+    // Demonstrates multi-role support: a payroll user who is also that employee's manager.
+    { email: "dave.payrolluser@peoplepay360.dev", roles: ["HR_PAYROLL_USER", "HR_MANAGER"], employeeId: dave.id },
+    { email: "payroll.manager@peoplepay360.dev", roles: ["HR_PAYROLL_MANAGER"], employeeId: null },
+    { email: "admin@peoplepay360.dev", roles: ["ADMIN"], employeeId: null },
   ];
 
   for (const u of users) {
-    await prisma.user.create({ data: { email: u.email, passwordHash, role: u.role, employeeId: u.employeeId } });
+    await prisma.user.create({ data: { email: u.email, passwordHash, roles: u.roles, employeeId: u.employeeId } });
   }
 
   console.log("Seed complete.");

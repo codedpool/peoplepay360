@@ -13,6 +13,8 @@ const createTimeOffTypeSchema = z.object({
   unit: z.enum(["DAYS", "HOURS"]),
   requiresAllocation: z.boolean().optional(),
   payrollIntegrated: z.boolean().optional(),
+  approverRole: z.string().min(1).nullable().optional(),
+  displayColor: z.string().min(1).nullable().optional(),
 });
 
 const updateTimeOffTypeSchema = createTimeOffTypeSchema.partial();
