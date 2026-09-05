@@ -8,6 +8,7 @@ const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { computeWorkedHours, computeOvertimeHours, deriveStatus } = require("../services/attendance");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -108,6 +109,7 @@ router.post(
       },
     });
 
+    await invalidateDashboardCache();
     res.status(201).json(record);
   })
 );
@@ -143,6 +145,7 @@ router.patch(
       },
     });
 
+    await invalidateDashboardCache();
     res.json(record);
   })
 );
@@ -204,6 +207,7 @@ router.patch(
       return updated;
     });
 
+    await invalidateDashboardCache();
     res.json(record);
   })
 );

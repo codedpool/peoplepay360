@@ -7,6 +7,7 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -103,6 +104,7 @@ router.patch(
     }
 
     const allocation = await prisma.timeOffAllocation.update({ where: { id: req.params.id }, data });
+    await invalidateDashboardCache();
     res.json(allocation);
   })
 );
@@ -122,6 +124,7 @@ router.post(
       where: { id: req.params.id },
       data: { status: "ACTIVE" },
     });
+    await invalidateDashboardCache();
     res.json(allocation);
   })
 );

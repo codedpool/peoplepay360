@@ -152,6 +152,10 @@ model Employee {
   scheduleId    String?        @map("schedule_id")
   schedule      WorkingSchedule? @relation(fields: [scheduleId], references: [id])
   status        EmployeeStatus @default(ACTIVE)
+  // Payroll Dashboard's "missing bank account" alert needs a real signal to
+  // check, not a guess — this is that signal. No actual bank details are
+  // stored anywhere (out of scope), just whether they're on file.
+  bankAccountOnFile Boolean    @default(false) @map("bank_account_on_file")
   createdAt     DateTime       @default(now()) @map("created_at")
 
   user                User?

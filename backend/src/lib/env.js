@@ -21,6 +21,10 @@ const env = {
   bcryptCost: Number(process.env.BCRYPT_COST ?? 12),
   loginLockoutThreshold: Number(process.env.LOGIN_LOCKOUT_THRESHOLD ?? 5),
   loginLockoutMinutes: Number(process.env.LOGIN_LOCKOUT_MINUTES ?? 15),
+  // Single-tenant system — there's no Company model anywhere in the schema.
+  // The dashboard mockup's Company filter has nothing real to filter by, so
+  // this is just the display name; the "filter" is a no-op with one option.
+  companyName: process.env.COMPANY_NAME ?? "OXP Pvt Ltd",
 };
 
 module.exports = { env };

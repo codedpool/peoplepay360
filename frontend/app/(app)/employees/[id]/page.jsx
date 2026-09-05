@@ -178,6 +178,7 @@ export default function EmployeeDetailPage() {
               managerId: employee.managerId ?? "",
               scheduleId: employee.scheduleId ?? "",
               status: employee.status,
+              bankAccountOnFile: employee.bankAccountOnFile,
             }}
             employees={employees}
             schedules={schedules}
@@ -198,6 +199,12 @@ export default function EmployeeDetailPage() {
             <div>
               <p className="field-label">Status</p>
               <Stamp tone={employee.status === "ACTIVE" ? "approved" : "neutral"}>{employee.status}</Stamp>
+            </div>
+            <div>
+              <p className="field-label">Bank account</p>
+              <Stamp tone={employee.bankAccountOnFile ? "approved" : "pending"}>
+                {employee.bankAccountOnFile ? "On file" : "Missing"}
+              </Stamp>
             </div>
           </div>
         )}

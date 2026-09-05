@@ -30,6 +30,16 @@ const paginationParams = [
 
 const idParam = { name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } };
 
+// Shared by every /api/dashboard/* endpoint except department-overview (which
+// groups BY department, so a department filter there would be self-defeating).
+const dashboardFilterParams = [
+  { name: "periodStart", in: "query", schema: { type: "string", format: "date" }, description: "Defaults to the start of the current month." },
+  { name: "periodEnd", in: "query", schema: { type: "string", format: "date" }, description: "Defaults to the end of the current month." },
+  { name: "department", in: "query", schema: { type: "string" } },
+  { name: "employeeType", in: "query", schema: { type: "string", enum: ["FULL_TIME", "PART_TIME", "SHIFT"] }, description: "Maps to the employee's WorkingSchedule.type." },
+  { name: "company", in: "query", schema: { type: "string" }, description: "Single-tenant system — matching the one real company (see GET /api/dashboard/company) returns real data; anything else returns zeroed/empty data." },
+];
+
 const openapiSpec = {
   openapi: "3.0.3",
   info: {
@@ -242,6 +252,46 @@ const openapiSpec = {
           contractId: { type: "string", format: "uuid" },
           startDate: { type: "string", format: "date" },
           wage: { type: "string" },
+        },
+      },
+      DashboardKpis: {
+        type: "object",
+        properties: {
+          totalNetSalaryPaid: { type: "number" },
+          netSalaryChangePercent: { type: "number", nullable: true, description: "vs. the immediately preceding period of equal length; null if that period had no paid salary to compare against." },
+          payslipsGenerated: { type: "integer" },
+          payslipsPaid: { type: "integer" },
+          payslipsPending: { type: "integer" },
+          avgSalaryPerEmployee: { type: "number" },
+          approvedTimeOffDays: { type: "number" },
+          attendanceHealthPercent: { type: "integer", nullable: true },
+          attendanceRecordsReviewed: { type: "integer" },
+        },
+      },
+      DashboardPayslipStatus: {
+        type: "object",
+        properties: {
+          statusCounts: { type: "object", properties: { DRAFT: { type: "integer" }, COMPUTED: { type: "integer" }, VALIDATED: { type: "integer" }, PAID: { type: "integer" }, SENT: { type: "integer" } } },
+          alerts: { type: "array", items: { type: "object", properties: { code: { type: "string" }, count: { type: "integer" }, message: { type: "string" } } } },
+        },
+      },
+      DashboardTimeOffRow: {
+        type: "object",
+        properties: {
+          typeId: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          unit: { type: "string", enum: ["DAYS", "HOURS"] },
+          approvedDays: { type: "number" },
+          pendingDays: { type: "number" },
+          remainingBalance: { type: "number", nullable: true, description: "null for types that don't requireAllocation — there's no balance to track." },
+        },
+      },
+      DashboardDepartmentRow: {
+        type: "object",
+        properties: {
+          department: { type: "string" },
+          headcount: { type: "integer" },
+          monthlySalary: { type: "number" },
         },
       },
     },
@@ -485,6 +535,31 @@ const openapiSpec = {
     },
     "/api/payslips/{id}/print/{jobId}": {
       get: { tags: ["Payslips"], summary: "Poll/download the rendered PDF", description: "Returns job state while pending; once completed, streams `application/pdf` bytes directly.", parameters: [idParam, { name: "jobId", in: "path", required: true, schema: { type: "string" } }], responses: { 200: { description: "PDF bytes (once completed) or job state JSON (while pending)" } } },
+    },
+
+    "/api/dashboard/company": {
+      get: { tags: ["Dashboard"], summary: "Get the single company name", description: "Single-tenant system — there is no Company model. This just backs the mockup's Company display; the `company` filter on every other dashboard endpoint is a no-op unless it doesn't match this value, in which case that endpoint honestly returns zeroed/empty data.", responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" } } } } } } } },
+    },
+    "/api/dashboard/kpis": {
+      get: { tags: ["Dashboard"], summary: "Payroll Dashboard KPI row", description: "Requires `dashboard:read` (HR_PAYROLL_USER, HR_PAYROLL_MANAGER, ADMIN). Redis-cached for 60s, invalidated on any Payrun/Payslip/Attendance/TimeOff mutation. `periodStart`/`periodEnd` default to the current calendar month.", parameters: dashboardFilterParams, responses: { 200: { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/DashboardKpis" } } } } } },
+    },
+    "/api/dashboard/salary-cost-by-department": {
+      get: { tags: ["Dashboard"], summary: "Salary Cost by Department chart data", description: "Requires `dashboard:read`. Sums PAID/SENT payslip NET lines grouped by the employee's department.", parameters: dashboardFilterParams, responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "object", properties: { data: { type: "array", items: { type: "object", properties: { department: { type: "string" }, totalNet: { type: "number" } } } } } } } } } } },
+    },
+    "/api/dashboard/salary-trend": {
+      get: { tags: ["Dashboard"], summary: "Monthly Net Salary Trend chart data", description: "Requires `dashboard:read`. `months` (default 6, max 24) controls how many calendar months back from now to include.", parameters: [...dashboardFilterParams, { name: "months", in: "query", schema: { type: "integer", default: 6, maximum: 24 } }], responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "object", properties: { data: { type: "array", items: { type: "object", properties: { month: { type: "string", example: "2026-08" }, totalNet: { type: "number" } } } } } } } } } } },
+    },
+    "/api/dashboard/payslip-status": {
+      get: { tags: ["Dashboard"], summary: "Payslip status split + real payroll alerts", description: "Requires `dashboard:read`. Alerts are all computed from real data, never placeholders: missing bank account (`Employee.bankAccountOnFile`), duplicate payslips (reuses payrunValidation's own finding), payruns still not validated, and contracts expiring within the period.", parameters: dashboardFilterParams, responses: { 200: { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/DashboardPayslipStatus" } } } } } },
+    },
+    "/api/dashboard/attendance-overview": {
+      get: { tags: ["Dashboard"], summary: "Attendance Overview chart + stats", description: "Requires `dashboard:read`.", parameters: dashboardFilterParams, responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "object", properties: { statusCounts: { type: "object" }, manualCorrections: { type: "integer" }, missingCheckouts: { type: "integer" }, coveragePercent: { type: "integer", nullable: true }, totalRecords: { type: "integer" } } } } } } } },
+    },
+    "/api/dashboard/time-off-overview": {
+      get: { tags: ["Dashboard"], summary: "Time Off Overview table", description: "Requires `dashboard:read`. Paginated per plan.md's scalability requirement, even though the row count is naturally small (one row per TimeOffType).", parameters: [...dashboardFilterParams, ...paginationParams], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("DashboardTimeOffRow") } } } } },
+    },
+    "/api/dashboard/department-overview": {
+      get: { tags: ["Dashboard"], summary: "Department Overview table", description: "Requires `dashboard:read`. Headcount and monthly salary (sum of ACTIVE contract wages) per department. Not scoped by `department` — this endpoint IS the group-by-department view.", parameters: [{ name: "employeeType", in: "query", schema: { type: "string", enum: ["FULL_TIME", "PART_TIME", "SHIFT"] } }, { name: "company", in: "query", schema: { type: "string" } }, ...paginationParams], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("DashboardDepartmentRow") } } } } },
     },
   },
 };

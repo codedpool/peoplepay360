@@ -9,6 +9,7 @@ const { parsePagination, paginatedResponse } = require("../lib/pagination");
 const { makeLimiter } = require("../middleware/rateLimiters");
 const { payrunComputeQueue, payslipEmailQueue } = require("../lib/queue");
 const { validatePayrun } = require("../services/payrunValidation");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -224,6 +225,7 @@ router.post(
       });
     });
 
+    await invalidateDashboardCache();
     res.json({ payrunId: payrun.id, status: nextStatus, findings });
   })
 );
@@ -254,6 +256,7 @@ router.post(
       });
     });
 
+    await invalidateDashboardCache();
     res.json({ payrunId: payrun.id, status: "PAID" });
   })
 );
@@ -296,6 +299,7 @@ router.post(
       });
     });
 
+    await invalidateDashboardCache();
     res.status(202).json({ payrunId: payrun.id, status: "SENT", jobIds: jobs.map((j) => j.id) });
   })
 );

@@ -8,6 +8,7 @@ const { assertOwnsOrElevated } = require("../middleware/ownership");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -80,6 +81,7 @@ router.post(
     }
 
     const request = await prisma.timeOffRequest.create({ data: { ...req.body, status: "PENDING" } });
+    await invalidateDashboardCache();
     res.status(201).json(request);
   })
 );
@@ -108,6 +110,7 @@ router.post(
       where: { id: req.params.id },
       data: { status: "CANCELLED" },
     });
+    await invalidateDashboardCache();
     res.json(request);
   })
 );
@@ -199,6 +202,7 @@ router.post(
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
 
+      await invalidateDashboardCache();
       res.json(result);
     } catch (err) {
       if (err.statusCode) {
@@ -245,6 +249,7 @@ router.post(
       return refused;
     });
 
+    await invalidateDashboardCache();
     res.json(request);
   })
 );

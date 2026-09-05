@@ -6,6 +6,7 @@ const { requirePermission } = require("../middleware/rbac");
 const { validateBody } = require("../middleware/validate");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { parsePagination, paginatedResponse } = require("../lib/pagination");
+const { invalidateDashboardCache } = require("../lib/dashboardCache");
 
 const router = express.Router();
 
@@ -67,6 +68,7 @@ router.post(
   asyncHandler(async (req, res) => {
     try {
       const contract = await prisma.contract.create({ data: req.body });
+      await invalidateDashboardCache();
       res.status(201).json(contract);
     } catch (err) {
       if (isExclusionViolation(err)) {
@@ -90,6 +92,7 @@ router.patch(
 
     try {
       const contract = await prisma.contract.update({ where: { id: req.params.id }, data: req.body });
+      await invalidateDashboardCache();
       res.json(contract);
     } catch (err) {
       if (isExclusionViolation(err)) {

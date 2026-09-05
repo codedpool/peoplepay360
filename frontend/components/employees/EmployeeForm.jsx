@@ -5,7 +5,14 @@ import ErrorNote from "../ui/ErrorNote";
 import { ROLE_LABELS } from "../../lib/permissions";
 import { suggestEmail, generatePassword } from "../../lib/credentials";
 
-const EMPTY = { department: "", jobPosition: "", managerId: "", scheduleId: "", status: "ACTIVE" };
+const EMPTY = {
+  department: "",
+  jobPosition: "",
+  managerId: "",
+  scheduleId: "",
+  status: "ACTIVE",
+  bankAccountOnFile: false,
+};
 const ROLE_VALUES = Object.keys(ROLE_LABELS);
 
 // Employee.name is one column in the schema — split only at the UI edge, so
@@ -63,6 +70,7 @@ export default function EmployeeForm({
       jobPosition: values.jobPosition,
       managerId: values.managerId || null,
       scheduleId: values.scheduleId || null,
+      bankAccountOnFile: values.bankAccountOnFile,
       ...(showStatus ? { status: values.status } : {}),
     };
     const credentials = withLogin && createLogin ? { email, password, roles } : null;
@@ -136,6 +144,15 @@ export default function EmployeeForm({
           </div>
         )}
       </div>
+
+      <label className="flex items-center gap-2 text-[0.85rem]">
+        <input
+          type="checkbox"
+          checked={values.bankAccountOnFile}
+          onChange={(e) => set("bankAccountOnFile", e.target.checked)}
+        />
+        Bank account on file
+      </label>
 
       {withLogin && (
         <div className="panel px-4 py-4">
