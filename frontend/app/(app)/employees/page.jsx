@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 import PageHeader from "../../../components/ui/PageHeader";
@@ -25,7 +26,10 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [view, setView] = useState("kanban");
-  const [search, setSearch] = useState("");
+  // Seeded from ?q= (the topbar search hands off here on Enter), then plain
+  // local state from there — typing further shouldn't rewrite the URL.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [showNew, setShowNew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
