@@ -37,5 +37,8 @@
   },
   "prisma": {
     "seed": "node prisma/seed.js"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }

@@ -2,8 +2,8 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const pinoHttp = require("pino-http");
 const swaggerUi = require("swagger-ui-express");
+const { httpLogger } = require("./lib/logger");
 const { env } = require("./lib/env");
 const { prisma } = require("./lib/prisma");
 const { redis } = require("./lib/redis");
@@ -30,7 +30,7 @@ app.use(helmet());
 app.use(cors({ origin: env.corsOrigin, credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
-app.use(pinoHttp());
+app.use(httpLogger);
 
 app.get("/health", async (_req, res) => {
   try {
