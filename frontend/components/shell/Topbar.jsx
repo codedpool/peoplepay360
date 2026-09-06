@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import { ROLE_LABELS } from "../../lib/permissions";
 
@@ -14,23 +13,9 @@ function initialsFor(email) {
 }
 
 export default function Topbar() {
-  const { user, logout, can } = useAuth();
-  const router = useRouter();
+  const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const menuRef = useRef(null);
-  // The org-wide Employees list this hands off to needs employee:read — a
-  // plain Employee only holds employee:read:own and has nothing here to
-  // search, so the box is disabled for them rather than navigating to a
-  // page they'd just see empty.
-  const canSearch = can("employee:read");
-
-  function handleSearchSubmit(e) {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-    router.push(`/employees?q=${encodeURIComponent(q)}`);
-  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -45,28 +30,7 @@ export default function Topbar() {
 
   return (
     <header className="h-16 shrink-0 border-b border-line bg-panel px-6 flex items-center gap-4 sticky top-0 z-10">
-      <form
-        onSubmit={handleSearchSubmit}
-        className={`flex-1 max-w-md flex items-center gap-2.5 rounded-lg border border-line bg-paper px-3 py-2
-          focus-within:ring-2 focus-within:ring-ledger/20 focus-within:border-ledger focus-within:bg-panel transition-colors
-          ${!canSearch ? "opacity-50" : ""}`}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-fade shrink-0">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" strokeLinecap="round" />
-        </svg>
-        <input
-          type="search"
-          disabled={!canSearch}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={canSearch ? "Search employees… (press Enter)" : "Search unavailable for your role"}
-          className="flex-1 min-w-0 bg-transparent text-[0.85rem] text-ink placeholder:text-fade/70 focus:outline-none disabled:cursor-not-allowed"
-        />
-      </form>
-
-      {/* ml-auto pins the account block to the right edge — without it the
-          block sits directly against the search box in the middle of the bar. */}
+      {/* ml-auto pins the account block to the right edge of the bar. */}
       <div className="relative ml-auto shrink-0" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
