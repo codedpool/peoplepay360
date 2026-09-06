@@ -64,6 +64,11 @@ export default function AllocationsPage() {
 
   const employeeById = useMemo(() => Object.fromEntries(employees.map((e) => [e.id, e])), [employees]);
   const typeById = useMemo(() => Object.fromEntries(types.map((t) => [t.id, t])), [types]);
+  // A type with requiresAllocation: false (e.g. Leave Without Pay) is never
+  // granted a balance by design — it's unpaid leave approved directly, with
+  // nothing to allocate. Listing it here would let HR "grant" an allocation
+  // that the request-approval flow can never draw against.
+  const allocatableTypes = useMemo(() => types.filter((t) => t.requiresAllocation), [types]);
 
   async function handleCreate(values) {
     setSubmitting(true);
@@ -180,7 +185,7 @@ export default function AllocationsPage() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Grant allocation">
         <AllocationForm
           employees={employees}
-          types={types}
+          types={allocatableTypes}
           submitting={submitting}
           error={formError}
           onSubmit={handleCreate}
