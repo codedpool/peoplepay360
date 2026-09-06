@@ -41,7 +41,7 @@ export default function ContractsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const params = new URLSearchParams({ pageSize: "100" });
+      const params = new URLSearchParams({ pageSize: "500" });
       if (statusFilter) params.set("status", statusFilter);
       if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
       const [contractsRes, employeesRes, structuresRes] = await Promise.all([

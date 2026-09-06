@@ -79,12 +79,12 @@ export default function TimeOffRequestsPage() {
       }
 
       if (canReadAll) {
-        const params = new URLSearchParams({ pageSize: "100" });
+        const params = new URLSearchParams({ pageSize: "500" });
         if (statusFilter) params.set("status", statusFilter);
         if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
         requestsToRun.push(
           api.get(`/api/timeoff-requests?${params}`),
-          api.get("/api/timeoff-allocations?pageSize=100"),
+          api.get("/api/timeoff-allocations?pageSize=500"),
           api.get("/api/employees?pageSize=500")
         );
       } else {

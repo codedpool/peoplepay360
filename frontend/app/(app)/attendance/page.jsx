@@ -82,7 +82,7 @@ export default function AttendancePage() {
       );
 
       if (canReadAll) {
-        const params = new URLSearchParams({ pageSize: "100" });
+        const params = new URLSearchParams({ pageSize: "500" });
         if (statusFilter) params.set("status", statusFilter);
         if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
         requests.push(api.get(`/api/attendance?${params}`));

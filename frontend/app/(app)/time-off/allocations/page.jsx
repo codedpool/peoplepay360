@@ -41,7 +41,7 @@ export default function AllocationsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const params = new URLSearchParams({ pageSize: "100" });
+      const params = new URLSearchParams({ pageSize: "500" });
       if (employeeIdFilter) params.set("employeeId", employeeIdFilter);
       const [allocRes, employeesRes, typesRes] = await Promise.all([
         api.get(`/api/timeoff-allocations?${params}`),
