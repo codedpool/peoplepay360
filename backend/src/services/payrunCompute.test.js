@@ -82,7 +82,7 @@ describe("computePayrun", () => {
         employeeId,
         startDate: new Date("2025-01-01"),
         endDate: null,
-        wage: 50000,
+        ctc: 600000,
         salaryStructureId: structure.id,
         status: "ACTIVE",
       },
@@ -114,7 +114,7 @@ describe("computePayrun", () => {
     expect(Number(payslip.workedDays)).toBe(21);
 
     const netLine = payslip.lines.find((l) => l.salaryRule.code === "NET");
-    expect(Number(netLine.amount)).toBe(45000); // full month: 50000 gross - 10% tax
+    expect(Number(netLine.amount)).toBe(45000); // full month: ctc 600000/12 = 50000 gross - 10% tax
 
     const updatedPayrun = await prisma.payrun.findUnique({ where: { id: payrun.id } });
     expect(updatedPayrun.status).toBe("COMPUTED");
@@ -129,7 +129,7 @@ describe("computePayrun", () => {
       data: {
         employeeId,
         startDate: new Date("2025-01-01"),
-        wage: 42000,
+        ctc: 504000,
         salaryStructureId: structure.id,
         status: "ACTIVE",
       },
@@ -159,7 +159,7 @@ describe("computePayrun", () => {
     const byCode = Object.fromEntries(
       payslip.lines.map((l) => [l.salaryRule.code, Number(l.amount)])
     );
-    // 42000 * 3/21 = 6000 gross, less 10% tax.
+    // ctc 504000/12 = 42000 monthly * 3/21 = 6000 gross, less 10% tax.
     expect(byCode.GROSS).toBe(6000);
     expect(byCode.NET).toBe(5400);
   });
@@ -171,7 +171,7 @@ describe("computePayrun", () => {
       data: {
         employeeId,
         startDate: new Date("2025-01-01"),
-        wage: 50000,
+        ctc: 600000,
         salaryStructureId: structure.id,
         status: "ACTIVE",
       },
@@ -228,10 +228,10 @@ describe("computePayrun", () => {
     const employeeA = await makeEmployee();
     const employeeB = await makeEmployee();
     await prisma.contract.create({
-      data: { employeeId: employeeA, startDate: new Date("2025-01-01"), wage: 40000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId: employeeA, startDate: new Date("2025-01-01"), ctc: 480000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
     await prisma.contract.create({
-      data: { employeeId: employeeB, startDate: new Date("2025-01-01"), wage: 60000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId: employeeB, startDate: new Date("2025-01-01"), ctc: 720000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
 
     const payrun = await prisma.payrun.create({

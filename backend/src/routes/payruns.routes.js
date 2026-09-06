@@ -134,7 +134,7 @@ router.get(
       weeklyHours: contract.employee.schedule ? Number(contract.employee.schedule.weeklyHours) : null,
       contractId: contract.id,
       startDate: contract.startDate,
-      wage: contract.wage,
+      ctc: contract.ctc,
     }));
 
     res.json(paginatedResponse(data, total, page, pageSize));

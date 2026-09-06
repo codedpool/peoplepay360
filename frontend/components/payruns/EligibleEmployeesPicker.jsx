@@ -81,7 +81,7 @@ export default function EligibleEmployeesPicker({ periodStart, periodEnd, select
                 <input type="checkbox" checked={selectedSet.has(r.employeeId)} onChange={() => toggle(r.employeeId)} />
                 <span className="flex-1 text-[0.85rem]">{r.name}</span>
                 <span className="text-[0.78rem] text-fade">{r.department}</span>
-                <span className="num text-[0.8rem] text-fade w-20 text-right">{formatCurrency(r.wage)}</span>
+                <span className="num text-[0.8rem] text-fade w-20 text-right">{formatCurrency(r.ctc)}</span>
               </label>
             ))}
           </div>

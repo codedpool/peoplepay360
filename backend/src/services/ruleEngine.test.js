@@ -13,9 +13,18 @@ const STANDARD_RULES = [
   { id: "r5", code: "NET", category: "NET", sequence: 5, computationMethod: "FORMULA", formulaOrValue: "GROSS - TAX" },
 ];
 
+// contract.ctc is annual — these fixtures are 12x the monthly figure the
+// assertions below are written against, so WAGE (ctc/12, prorated) comes out
+// to exactly the same numbers as when these tests were written directly
+// against a monthly wage. The point of these tests is sequencing/proration,
+// not the /12 conversion itself — that gets its own dedicated tests below.
+function contractWithMonthly(monthly) {
+  return { ctc: monthly * 12 };
+}
+
 describe("computePayslipLines", () => {
   it("walks rules in sequence, threading each result into the next via the running context", () => {
-    const lines = computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES });
+    const lines = computePayslipLines({ contract: contractWithMonthly(60000), rules: STANDARD_RULES });
 
     const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
     expect(byCode.BASIC).toBe(60000);
@@ -29,14 +38,14 @@ describe("computePayslipLines", () => {
 
   it("computes correctly even if rules are supplied out of sequence order", () => {
     const shuffled = [...STANDARD_RULES].reverse();
-    const lines = computePayslipLines({ contract: { wage: 60000 }, rules: shuffled });
+    const lines = computePayslipLines({ contract: contractWithMonthly(60000), rules: shuffled });
     const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
     expect(byCode.NET).toBe(59400);
   });
 
   it("is pure: computing twice with different wages never leaks state between calls", () => {
-    const first = computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES });
-    const second = computePayslipLines({ contract: { wage: 90000 }, rules: STANDARD_RULES });
+    const first = computePayslipLines({ contract: contractWithMonthly(60000), rules: STANDARD_RULES });
+    const second = computePayslipLines({ contract: contractWithMonthly(90000), rules: STANDARD_RULES });
 
     const firstNet = first.find((l) => l.code === "NET").amount;
     const secondNet = second.find((l) => l.code === "NET").amount;
@@ -46,7 +55,7 @@ describe("computePayslipLines", () => {
 
   it("throws rather than silently producing NaN when a formula is malformed", () => {
     const broken = [{ id: "r1", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FORMULA", formulaOrValue: "UNKNOWN" }];
-    expect(() => computePayslipLines({ contract: { wage: 1000 }, rules: broken })).toThrow(/unknown value/);
+    expect(() => computePayslipLines({ contract: contractWithMonthly(1000), rules: broken })).toThrow(/unknown value/);
   });
 
   it("throws on a duplicate rule code within the same structure", () => {
@@ -54,7 +63,7 @@ describe("computePayslipLines", () => {
       { id: "r1", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" },
       { id: "r2", code: "BASIC", category: "ALLOWANCE", sequence: 2, computationMethod: "FIXED", formulaOrValue: "1" },
     ];
-    expect(() => computePayslipLines({ contract: { wage: 1000 }, rules: dup })).toThrow(/Duplicate rule code/);
+    expect(() => computePayslipLines({ contract: contractWithMonthly(1000), rules: dup })).toThrow(/Duplicate rule code/);
   });
 
   it("requires a resolved contract", () => {
@@ -62,9 +71,32 @@ describe("computePayslipLines", () => {
   });
 });
 
+describe("computePayslipLines annual CTC -> monthly WAGE", () => {
+  it("divides the annual CTC by 12 to seed WAGE, not the raw contract figure", () => {
+    const rules = [{ id: "r1", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" }];
+    const lines = computePayslipLines({ contract: { ctc: 1_200_000 }, rules });
+    expect(lines.find((l) => l.code === "BASIC").amount).toBe(100_000);
+  });
+
+  it("exposes the raw annual figure as ANNUAL_CTC for a rule that genuinely needs it", () => {
+    const rules = [
+      { id: "r1", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" },
+      { id: "r2", code: "GRATUITY_PROVISION", category: "ALLOWANCE", sequence: 2, computationMethod: "FORMULA", formulaOrValue: "0.0481 * ANNUAL_CTC / 12" },
+    ];
+    const lines = computePayslipLines({ contract: { ctc: 1_200_000 }, rules });
+    const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
+    expect(byCode.GRATUITY_PROVISION).toBeCloseTo((0.0481 * 1_200_000) / 12, 6);
+  });
+
+  it("refuses a rule coded as ANNUAL_CTC, the same as any other reserved name", () => {
+    const clashing = [{ id: "r1", code: "ANNUAL_CTC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "1" }];
+    expect(() => computePayslipLines({ contract: { ctc: 1000 }, rules: clashing })).toThrow(/reserved/);
+  });
+});
+
 describe("computePayslipLines attendance proration", () => {
   it("defaults to a full month when no ratio is supplied", () => {
-    const lines = computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES });
+    const lines = computePayslipLines({ contract: contractWithMonthly(60000), rules: STANDARD_RULES });
     expect(lines.find((l) => l.code === "BASIC").amount).toBe(60000);
   });
 
@@ -73,7 +105,7 @@ describe("computePayslipLines attendance proration", () => {
   // on the payslip.
   it("prorates every line, and the lines still reconcile to NET", () => {
     const lines = computePayslipLines({
-      contract: { wage: 60000 },
+      contract: contractWithMonthly(60000),
       rules: STANDARD_RULES,
       workedRatio: 0.5,
     });
@@ -90,7 +122,7 @@ describe("computePayslipLines attendance proration", () => {
 
   it("pays two days out of twenty-two as two days, not a whole month", () => {
     const lines = computePayslipLines({
-      contract: { wage: 44000 },
+      contract: contractWithMonthly(44000),
       rules: STANDARD_RULES,
       workedRatio: 2 / 22,
       workedDays: 2,
@@ -101,7 +133,7 @@ describe("computePayslipLines attendance proration", () => {
 
   it("pays nothing for a month with no attendance", () => {
     const lines = computePayslipLines({
-      contract: { wage: 60000 },
+      contract: contractWithMonthly(60000),
       rules: STANDARD_RULES,
       workedRatio: 0,
     });
@@ -116,7 +148,7 @@ describe("computePayslipLines attendance proration", () => {
       { id: "r3", code: "DAYS", category: "ALLOWANCE", sequence: 3, computationMethod: "FORMULA", formulaOrValue: "WORKED_DAYS * 100" },
     ];
     const lines = computePayslipLines({
-      contract: { wage: 60000 },
+      contract: contractWithMonthly(60000),
       rules,
       workedRatio: 0.5,
       workedDays: 11,
@@ -125,16 +157,16 @@ describe("computePayslipLines attendance proration", () => {
     const byCode = Object.fromEntries(lines.map((l) => [l.code, l.amount]));
 
     expect(byCode.BASIC).toBe(30000); // prorated
-    expect(byCode.INSURANCE).toBe(600); // 1% of the *contractual* wage
+    expect(byCode.INSURANCE).toBe(600); // 1% of the *unprorated monthly* wage
     expect(byCode.DAYS).toBe(1100);
   });
 
   it("rejects a ratio outside 0..1 instead of paying more than a full month", () => {
     expect(() =>
-      computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES, workedRatio: 1.5 })
+      computePayslipLines({ contract: contractWithMonthly(60000), rules: STANDARD_RULES, workedRatio: 1.5 })
     ).toThrow(/between 0 and 1/);
     expect(() =>
-      computePayslipLines({ contract: { wage: 60000 }, rules: STANDARD_RULES, workedRatio: -0.2 })
+      computePayslipLines({ contract: contractWithMonthly(60000), rules: STANDARD_RULES, workedRatio: -0.2 })
     ).toThrow(/between 0 and 1/);
   });
 
@@ -142,7 +174,7 @@ describe("computePayslipLines attendance proration", () => {
     const clashing = [
       { id: "r1", code: "WORKED_RATIO", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "1" },
     ];
-    expect(() => computePayslipLines({ contract: { wage: 1000 }, rules: clashing })).toThrow(
+    expect(() => computePayslipLines({ contract: contractWithMonthly(1000), rules: clashing })).toThrow(
       /reserved/
     );
   });

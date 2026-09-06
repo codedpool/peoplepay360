@@ -219,7 +219,7 @@ export default function EmployeeDetailPage() {
                 <tr>
                   <th>Start</th>
                   <th>End</th>
-                  <th className="text-right">Wage / month</th>
+                  <th className="text-right">CTC / year</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -228,7 +228,7 @@ export default function EmployeeDetailPage() {
                   <tr key={c.id}>
                     <td className="num">{formatDate(c.startDate)}</td>
                     <td className="num">{formatDate(c.endDate)}</td>
-                    <td className="num text-right">{formatCurrency(c.wage)}</td>
+                    <td className="num text-right">{formatCurrency(c.ctc)}</td>
                     <td>
                       <Stamp tone={CONTRACT_TONE[c.status]}>{c.status}</Stamp>
                     </td>

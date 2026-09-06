@@ -26,7 +26,7 @@ export default function ContractForm({
   const [employeeId, setEmployeeId] = useState(initial?.employeeId ?? "");
   const [startDate, setStartDate] = useState(toDateInput(initial?.startDate) || new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(toDateInput(initial?.endDate));
-  const [wage, setWage] = useState(initial?.wage ?? "");
+  const [ctc, setCtc] = useState(initial?.ctc ?? "");
   const [salaryStructureId, setSalaryStructureId] = useState(initial?.salaryStructureId ?? "");
   const [status, setStatus] = useState(initial?.status ?? "DRAFT");
 
@@ -43,7 +43,7 @@ export default function ContractForm({
       ...(mode === "create" ? { employeeId } : {}),
       startDate,
       endDate: endDate || null,
-      wage: Number(wage),
+      ctc: Number(ctc),
       salaryStructureId: salaryStructureId || null,
       status,
     });
@@ -93,16 +93,19 @@ export default function ContractForm({
           )}
         </div>
         <div className="field-group">
-          <label className="field-label">Wage / month</label>
+          <label className="field-label">CTC / year</label>
           <input
             type="number"
             min="0"
             step="0.01"
             required
             className="field num"
-            value={wage}
-            onChange={(e) => setWage(e.target.value)}
+            value={ctc}
+            onChange={(e) => setCtc(e.target.value)}
           />
+          <p className="text-[0.72rem] text-fade mt-1">
+            Annual Cost to Company — the payslip's Basic/HRA/allowances are derived from this, not entered separately.
+          </p>
         </div>
         <div className="field-group">
           <label className="field-label">Salary structure</label>

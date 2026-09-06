@@ -23,7 +23,7 @@ const contractFields = z.object({
   employeeId: z.coerce.number().int().positive(),
   startDate: dateSchema,
   endDate: dateSchema.nullable().optional(),
-  wage: z.coerce.number().positive(),
+  ctc: z.coerce.number().positive(),
   salaryStructureId: z.coerce.number().int().positive().nullable().optional(),
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"]).optional(),
 });

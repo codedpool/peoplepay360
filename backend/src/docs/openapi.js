@@ -119,7 +119,7 @@ const openapiSpec = {
           employeeId: { type: "integer" },
           startDate: { type: "string", format: "date" },
           endDate: { type: "string", format: "date", nullable: true },
-          wage: { type: "string", description: "Decimal, serialized as string" },
+          ctc: { type: "string", description: "Annual Cost to Company, decimal serialized as string" },
           salaryStructureId: { type: "integer", nullable: true },
           status: { type: "string", enum: ["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"] },
           createdAt: { type: "string", format: "date-time" },
@@ -259,7 +259,7 @@ const openapiSpec = {
           weeklyHours: { type: "number", nullable: true },
           contractId: { type: "integer" },
           startDate: { type: "string", format: "date" },
-          wage: { type: "string" },
+          ctc: { type: "string", description: "Annual Cost to Company" },
         },
       },
       DashboardKpis: {
@@ -384,7 +384,7 @@ const openapiSpec = {
       get: { tags: ["Contracts"], summary: "List contracts", description: "Requires `contract:read`.", parameters: [...paginationParams, { name: "employeeId", in: "query", schema: { type: "integer" } }, { name: "status", in: "query", schema: { type: "string" } }], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("Contract") } } } } },
       post: {
         tags: ["Contracts"], summary: "Create a contract", description: "Requires `contract:write`. Overlapping ACTIVE contracts for the same employee are rejected by a DB exclusion constraint, surfaced as 409.",
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["employeeId", "startDate", "wage"], properties: { employeeId: { type: "integer" }, startDate: { type: "string", format: "date" }, endDate: { type: "string", format: "date", nullable: true }, wage: { type: "number" }, salaryStructureId: { type: "integer", nullable: true }, status: { type: "string", enum: ["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"] } } } } } },
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["employeeId", "startDate", "ctc"], properties: { employeeId: { type: "integer" }, startDate: { type: "string", format: "date" }, endDate: { type: "string", format: "date", nullable: true }, ctc: { type: "number", description: "Annual Cost to Company" }, salaryStructureId: { type: "integer", nullable: true }, status: { type: "string", enum: ["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED"] } } } } } },
         responses: { 201: { description: "Created", ...jsonBody("Contract") }, 409: err("Overlapping active contract for this employee") },
       },
     },
@@ -567,7 +567,7 @@ const openapiSpec = {
       get: { tags: ["Dashboard"], summary: "Time Off Overview table", description: "Requires `dashboard:read`. Paginated per plan.md's scalability requirement, even though the row count is naturally small (one row per TimeOffType).", parameters: [...dashboardFilterParams, ...paginationParams], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("DashboardTimeOffRow") } } } } },
     },
     "/api/dashboard/department-overview": {
-      get: { tags: ["Dashboard"], summary: "Department Overview table", description: "Requires `dashboard:read`. Headcount and monthly salary (sum of ACTIVE contract wages) per department. Not scoped by `department` — this endpoint IS the group-by-department view.", parameters: [{ name: "employeeType", in: "query", schema: { type: "string", enum: ["FULL_TIME", "PART_TIME", "SHIFT"] } }, { name: "company", in: "query", schema: { type: "string" } }, ...paginationParams], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("DashboardDepartmentRow") } } } } },
+      get: { tags: ["Dashboard"], summary: "Department Overview table", description: "Requires `dashboard:read`. Headcount and monthly salary (sum of ACTIVE contracts' annual CTC, divided by 12) per department. Not scoped by `department` — this endpoint IS the group-by-department view.", parameters: [{ name: "employeeType", in: "query", schema: { type: "string", enum: ["FULL_TIME", "PART_TIME", "SHIFT"] } }, { name: "company", in: "query", schema: { type: "string" } }, ...paginationParams], responses: { 200: { description: "OK", content: { "application/json": { schema: paginated("DashboardDepartmentRow") } } } } },
     },
   },
 };

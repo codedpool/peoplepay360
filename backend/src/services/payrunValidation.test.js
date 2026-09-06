@@ -47,7 +47,7 @@ describe("validatePayrun", () => {
     const structure = await makeStructureWithRule();
     const employeeId = await makeEmployee();
     const contract = await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), wage: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), ctc: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
     const payrun = await makePayrun(structure.id, new Date("2025-06-01"), new Date("2025-06-30"));
     const netRule = await prisma.salaryRule.findFirst({ where: { salaryStructureId: structure.id, code: "NET" } });
@@ -74,7 +74,7 @@ describe("validatePayrun", () => {
     const structure = await makeStructureWithRule();
     const employeeId = await makeEmployee();
     const contract = await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), wage: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), ctc: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
     const netRule = await prisma.salaryRule.findFirst({ where: { salaryStructureId: structure.id, code: "NET" } });
 
@@ -99,7 +99,7 @@ describe("validatePayrun", () => {
     const payrunStructure = await makeStructureWithRule();
     const employeeId = await makeEmployee();
     const contract = await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), wage: 1000, salaryStructureId: contractStructure.id, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), ctc: 1000, salaryStructureId: contractStructure.id, status: "ACTIVE" },
     });
     const payrun = await makePayrun(payrunStructure.id, new Date("2025-08-01"), new Date("2025-08-31"));
     const netRule = await prisma.salaryRule.findFirst({ where: { salaryStructureId: payrunStructure.id, code: "NET" } });
@@ -119,7 +119,7 @@ describe("validatePayrun", () => {
     const structure = await makeStructureWithRule();
     const employeeId = await makeEmployee();
     const contract = await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), wage: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), ctc: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
     const netRule = await prisma.salaryRule.findFirst({ where: { salaryStructureId: structure.id, code: "NET" } });
     const payrun = await makePayrun(structure.id, new Date("2025-09-01"), new Date("2025-09-30"));

@@ -320,7 +320,10 @@ async function getDepartmentOverview({ employeeType }) {
   });
   const salaryByDepartment = {};
   for (const c of contracts) {
-    salaryByDepartment[c.employee.department] = (salaryByDepartment[c.employee.department] ?? 0) + Number(c.wage);
+    // c.ctc is annual — this feeds a column labelled "Monthly Salary", so it's
+    // divided down the same way the rule engine derives a month's WAGE from it.
+    salaryByDepartment[c.employee.department] =
+      (salaryByDepartment[c.employee.department] ?? 0) + Number(c.ctc) / 12;
   }
 
   const departments = new Set([...Object.keys(headcountByDepartment), ...Object.keys(salaryByDepartment)]);

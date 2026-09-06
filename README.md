@@ -34,7 +34,7 @@ payslips — with a payroll dashboard on top.
 | Area | Capabilities |
 | --- | --- |
 | **Employees** | Directory, departments, job positions, reporting lines, per-employee working schedule, bank-details-on-file flag |
-| **Contracts** | Wage, salary structure, date range, lifecycle status. A database exclusion constraint makes overlapping `ACTIVE` contracts per employee impossible |
+| **Contracts** | Annual CTC, salary structure, date range, lifecycle status. A database exclusion constraint makes overlapping `ACTIVE` contracts per employee impossible |
 | **Working schedules** | Weekly hours plus a day/start/end pattern. Drives what counts as a full day and how many working days a period contains |
 | **Attendance** | Check in / check out, manual correction with audit trail, derived worked hours, overtime and a **day fraction** (1 / 0.5 / 0) |
 | **Time off** | Leave types (day- or hour-based), allocations with balances, requests with approve / refuse / cancel, plus an employee-initiated "please cancel my approved leave" queue for HR |
@@ -338,26 +338,40 @@ formula — it is whatever the context holds once the ordered walk finishes.
 
 Rules compute as `FIXED`, `PERCENTAGE`, or `FORMULA` (an expression evaluated in
 a sandbox, not `eval`). The context is seeded with reserved variables that a rule
-may read but not shadow — `WAGE`, `FULL_WAGE`, `WORKED_RATIO`, `WORKED_DAYS`,
-`PERIOD_DAYS`. Naming a rule after one of them is rejected.
+may read but not shadow — `WAGE`, `FULL_WAGE`, `ANNUAL_CTC`, `WORKED_RATIO`,
+`WORKED_DAYS`, `PERIOD_DAYS`. Naming a rule after one of them is rejected.
 
-### Proration
+### CTC and proration
 
-Attendance reaches payroll through one number:
+`Contract.ctc` is an **annual** Cost to Company — what HR actually negotiates,
+not a monthly take-home someone has to work out by hand before it can go in the
+system. The rule engine derives everything else from it:
 
 ```
 workedDays  = Σ dayFraction over the period, capped at 1 per calendar day
 periodDays  = working days the schedule says the period contained
 workedRatio = min(workedDays / periodDays, 1)
 
-WAGE      = contract.wage × workedRatio      ← prorated, what rules use by default
-FULL_WAGE = contract.wage                    ← unprorated, opt-in
+WAGE       = (contract.ctc / 12) × workedRatio   ← prorated monthly, what rules use by default
+FULL_WAGE  = contract.ctc / 12                   ← unprorated monthly, opt-in
+ANNUAL_CTC = contract.ctc                        ← the raw annual figure, opt-in
 ```
 
-Because the prorated wage seeds the context, every dependent rule prorates with
-it automatically and the payslip lines still reconcile to `NET`. `WORKED_RATIO`
-is capped at 1 — extra days are overtime, which the structure prices separately,
-and must never inflate the base wage past 100%.
+A structure's rules break `WAGE` **down**, not build on top of it — Basic is a
+share of it (e.g. 40%), HRA and other allowances are shares of Basic, and a
+`SPECIAL_ALLOWANCE` formula absorbs whatever's left so the components always
+reconcile back to the full prorated monthly CTC before deductions:
+
+```
+BASIC             = 0.40 × WAGE
+HRA               = 0.20 × BASIC
+SPECIAL_ALLOWANCE = WAGE - BASIC - HRA - TA         ← balancing figure
+GROSS             = BASIC + HRA + TA + SPECIAL_ALLOWANCE   (= WAGE)
+NET               = GROSS - PF - PT - TDS
+```
+
+`WORKED_RATIO` is capped at 1 — extra days are overtime, which the structure
+prices separately, and must never inflate CTC past 100% for the period.
 
 ### Payrun lifecycle
 
@@ -546,7 +560,7 @@ dates — so the current period always has data in it.
 - Three completed payruns (`SENT`, `PAID`, `COMPUTED`) for the previous three months, plus a `DRAFT` for the current month as the starting point for the compute → validate → pay → send walkthrough
 - Payslips whose worked days and proration come from that seeded attendance via the same services the compute job uses, so a seeded payslip matches what recomputing the payrun would produce
 - Time-off types in both `DAYS` and `HOURS`, allocations, and requests in every status including some awaiting HR cancellation
-- Wage bands are **monthly**, matching `Contract.wage`
+- CTC bands are **annual**, matching `Contract.ctc` — the rule engine derives the monthly breakdown
 
 The seed uses a deterministic PRNG, so a reseed produces the same dataset rather
 than reshuffling every chart between runs.

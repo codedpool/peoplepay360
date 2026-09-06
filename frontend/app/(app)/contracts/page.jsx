@@ -142,7 +142,7 @@ export default function ContractsPage() {
               <th>Employee</th>
               <th>Start</th>
               <th>End</th>
-              <th className="text-right">Wage / month</th>
+              <th className="text-right">CTC / year</th>
               <th>Salary structure</th>
               <th>Status</th>
               <th></th>
@@ -154,7 +154,7 @@ export default function ContractsPage() {
                 <td className="font-medium">{employeeById[c.employeeId]?.name ?? "—"}</td>
                 <td className="num">{formatDate(c.startDate)}</td>
                 <td className="num">{formatDate(c.endDate)}</td>
-                <td className="num text-right">{formatCurrency(c.wage)}</td>
+                <td className="num text-right">{formatCurrency(c.ctc)}</td>
                 <td className="text-fade">{c.salaryStructureId ? structureNameById[c.salaryStructureId] ?? "—" : "—"}</td>
                 <td>
                   <Stamp tone={STATUS_TONE[c.status]}>{c.status}</Stamp>

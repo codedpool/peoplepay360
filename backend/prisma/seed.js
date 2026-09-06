@@ -56,18 +56,19 @@ const DEPARTMENTS = [
   { name: "Marketing", positions: ["Marketing Executive", "Content Strategist", "Marketing Manager"], weight: 8 },
 ];
 
-// Wage bands per position keep the salary-cost-by-department chart believable
+// CTC bands per position keep the salary-cost-by-department chart believable
 // instead of every employee earning a random number.
 //
-// These are MONTHLY figures, because Contract.wage is a monthly wage — the
-// form labels it "Wage / month" and the rule engine pays it out once per
-// payrun month. Seeding annual figures here (as this once did) paid every
-// employee their whole year's salary every month and inflated payroll ~12x.
-function wageFor(position) {
-  if (/Manager|Lead/.test(position)) return randInt(80000, 120000);
-  if (/Senior/.test(position)) return randInt(65000, 92000);
-  if (/Analyst|Specialist|Strategist|Engineer|Accountant/.test(position)) return randInt(45000, 70000);
-  return randInt(28000, 50000);
+// These are ANNUAL figures — Contract.ctc is Cost to Company, what HR
+// actually negotiates, not a monthly take-home someone has to pre-derive by
+// hand before it can go in the system. The rule engine (ruleEngine.js) is
+// what divides this by 12 and breaks it into Basic/HRA/allowances; nothing
+// here or in the contract form does that math.
+function ctcFor(position) {
+  if (/Manager|Lead/.test(position)) return randInt(960000, 1440000);
+  if (/Senior/.test(position)) return randInt(780000, 1100000);
+  if (/Analyst|Specialist|Strategist|Engineer|Accountant/.test(position)) return randInt(540000, 840000);
+  return randInt(336000, 600000);
 }
 
 function addDays(d, n) {
@@ -150,19 +151,26 @@ async function main() {
   console.log("Seeding salary structures…");
   // Sequence matters: each rule may only reference codes defined before it
   // (Golden Rule #2). BASIC -> allowances -> GROSS -> deductions -> NET.
+  // BASIC is a share of WAGE (the monthly CTC), not all of it — HRA and TA are
+  // shares/fixed amounts on top of BASIC as usual, and SPECIAL_ALLOWANCE is a
+  // balancing formula that absorbs whatever's left, so BASIC + HRA + TA +
+  // SPECIAL_ALLOWANCE always reconciles back to the full monthly CTC instead
+  // of the old structure where allowances were added ON TOP of a wage that
+  // was itself already meant to be the whole month's pay.
   const standard = await prisma.salaryStructure.create({
     data: {
       name: "Standard Structure", active: true,
       rules: {
         create: [
-          { name: "Basic", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" },
+          { name: "Basic", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "PERCENTAGE", formulaOrValue: "0.40 * WAGE" },
           { name: "House Rent Allowance", code: "HRA", category: "ALLOWANCE", sequence: 2, computationMethod: "PERCENTAGE", formulaOrValue: "0.20 * BASIC" },
-          { name: "Transport Allowance", code: "TA", category: "ALLOWANCE", sequence: 3, computationMethod: "FIXED", formulaOrValue: "19200" },
-          { name: "Gross", code: "GROSS", category: "GROSS", sequence: 4, computationMethod: "FORMULA", formulaOrValue: "BASIC + HRA + TA" },
-          { name: "Provident Fund", code: "PF", category: "DEDUCTION", sequence: 5, computationMethod: "PERCENTAGE", formulaOrValue: "0.12 * BASIC" },
-          { name: "Professional Tax", code: "PT", category: "DEDUCTION", sequence: 6, computationMethod: "FIXED", formulaOrValue: "2400" },
-          { name: "Income Tax", code: "TDS", category: "DEDUCTION", sequence: 7, computationMethod: "PERCENTAGE", formulaOrValue: "0.10 * GROSS" },
-          { name: "Net", code: "NET", category: "NET", sequence: 8, computationMethod: "FORMULA", formulaOrValue: "GROSS - PF - PT - TDS" },
+          { name: "Transport Allowance", code: "TA", category: "ALLOWANCE", sequence: 3, computationMethod: "FIXED", formulaOrValue: "1600" },
+          { name: "Special Allowance", code: "SPECIAL_ALLOWANCE", category: "ALLOWANCE", sequence: 4, computationMethod: "FORMULA", formulaOrValue: "WAGE - BASIC - HRA - TA" },
+          { name: "Gross", code: "GROSS", category: "GROSS", sequence: 5, computationMethod: "FORMULA", formulaOrValue: "BASIC + HRA + TA + SPECIAL_ALLOWANCE" },
+          { name: "Provident Fund", code: "PF", category: "DEDUCTION", sequence: 6, computationMethod: "PERCENTAGE", formulaOrValue: "0.12 * BASIC" },
+          { name: "Professional Tax", code: "PT", category: "DEDUCTION", sequence: 7, computationMethod: "FIXED", formulaOrValue: "200" },
+          { name: "Income Tax", code: "TDS", category: "DEDUCTION", sequence: 8, computationMethod: "PERCENTAGE", formulaOrValue: "0.10 * GROSS" },
+          { name: "Net", code: "NET", category: "NET", sequence: 9, computationMethod: "FORMULA", formulaOrValue: "GROSS - PF - PT - TDS" },
         ],
       },
     },
@@ -173,13 +181,14 @@ async function main() {
       name: "Executive Structure", active: true,
       rules: {
         create: [
-          { name: "Basic", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "FIXED", formulaOrValue: "WAGE" },
+          { name: "Basic", code: "BASIC", category: "BASIC", sequence: 1, computationMethod: "PERCENTAGE", formulaOrValue: "0.40 * WAGE" },
           { name: "House Rent Allowance", code: "HRA", category: "ALLOWANCE", sequence: 2, computationMethod: "PERCENTAGE", formulaOrValue: "0.30 * BASIC" },
           { name: "Performance Bonus", code: "BONUS", category: "ALLOWANCE", sequence: 3, computationMethod: "PERCENTAGE", formulaOrValue: "0.15 * BASIC" },
-          { name: "Gross", code: "GROSS", category: "GROSS", sequence: 4, computationMethod: "FORMULA", formulaOrValue: "BASIC + HRA + BONUS" },
-          { name: "Provident Fund", code: "PF", category: "DEDUCTION", sequence: 5, computationMethod: "PERCENTAGE", formulaOrValue: "0.12 * BASIC" },
-          { name: "Income Tax", code: "TDS", category: "DEDUCTION", sequence: 6, computationMethod: "PERCENTAGE", formulaOrValue: "0.20 * GROSS" },
-          { name: "Net", code: "NET", category: "NET", sequence: 7, computationMethod: "FORMULA", formulaOrValue: "GROSS - PF - TDS" },
+          { name: "Special Allowance", code: "SPECIAL_ALLOWANCE", category: "ALLOWANCE", sequence: 4, computationMethod: "FORMULA", formulaOrValue: "WAGE - BASIC - HRA - BONUS" },
+          { name: "Gross", code: "GROSS", category: "GROSS", sequence: 5, computationMethod: "FORMULA", formulaOrValue: "BASIC + HRA + BONUS + SPECIAL_ALLOWANCE" },
+          { name: "Provident Fund", code: "PF", category: "DEDUCTION", sequence: 6, computationMethod: "PERCENTAGE", formulaOrValue: "0.12 * BASIC" },
+          { name: "Income Tax", code: "TDS", category: "DEDUCTION", sequence: 7, computationMethod: "PERCENTAGE", formulaOrValue: "0.20 * GROSS" },
+          { name: "Net", code: "NET", category: "NET", sequence: 8, computationMethod: "FORMULA", formulaOrValue: "GROSS - PF - TDS" },
         ],
       },
     },
@@ -250,7 +259,7 @@ async function main() {
   for (const e of employees) {
     const isExec = /Manager/.test(e.jobPosition);
     const structure = isExec ? executive : standard;
-    const wage = wageFor(e.jobPosition);
+    const ctc = ctcFor(e.jobPosition);
 
     // ~30% have a prior EXPIRED contract — the history that makes period-based
     // contract resolution demonstrable rather than theoretical.
@@ -260,7 +269,7 @@ async function main() {
           employeeId: e.id,
           startDate: monthStart(-42 + randInt(0, 5)),
           endDate: monthEnd(-22),
-          wage: Math.round(wage * 0.88),
+          ctc: Math.round(ctc * 0.88),
           salaryStructureId: structure.id,
           status: "EXPIRED",
         },
@@ -274,7 +283,7 @@ async function main() {
           data: {
             employeeId: e.id, startDate: monthStart(-20),
             endDate: monthEnd(-randInt(4, 9)),
-            wage, salaryStructureId: structure.id, status: "EXPIRED",
+            ctc, salaryStructureId: structure.id, status: "EXPIRED",
           },
         })
       );
@@ -290,7 +299,7 @@ async function main() {
           employeeId: e.id,
           startDate: monthStart(-20),
           endDate: expiresSoon ? monthEnd(randInt(0, 1)) : null,
-          wage, salaryStructureId: structure.id, status: "ACTIVE",
+          ctc, salaryStructureId: structure.id, status: "ACTIVE",
         },
       })
     );
@@ -302,7 +311,7 @@ async function main() {
     await prisma.contract.create({
       data: {
         employeeId: e.id, startDate: monthStart(4), endDate: null,
-        wage: wageFor(e.jobPosition), salaryStructureId: standard.id, status: "DRAFT",
+        ctc: ctcFor(e.jobPosition), salaryStructureId: standard.id, status: "DRAFT",
       },
     });
   }
@@ -310,7 +319,7 @@ async function main() {
     await prisma.contract.create({
       data: {
         employeeId: e.id, startDate: monthStart(-26), endDate: monthEnd(-24),
-        wage: wageFor(e.jobPosition), salaryStructureId: standard.id, status: "CANCELLED",
+        ctc: ctcFor(e.jobPosition), salaryStructureId: standard.id, status: "CANCELLED",
       },
     });
   }

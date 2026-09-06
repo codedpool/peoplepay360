@@ -216,7 +216,11 @@ model Contract {
   employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   startDate         DateTime       @map("start_date") @db.Date
   endDate           DateTime?      @map("end_date") @db.Date
-  wage              Decimal        @db.Decimal(12, 2)
+  // Annual Cost to Company — what HR actually knows and negotiates, not a
+  // monthly figure someone has to pre-derive by hand. The rule engine divides
+  // this by 12 (and prorates by attendance) to seed the WAGE a structure's
+  // rules build Basic/HRA/allowances down from; see ruleEngine.js.
+  ctc               Decimal        @db.Decimal(12, 2)
   // The employee's nominal/default structure — NOT what computePayrun reads.
   // A Payrun applies its own salaryStructureId uniformly to every selected
   // employee; this column is instead consulted by payrunValidation's

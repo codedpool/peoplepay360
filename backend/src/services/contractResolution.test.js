@@ -34,17 +34,17 @@ describe("resolveContractForPeriod", () => {
         employeeId,
         startDate: new Date("2024-01-01"),
         endDate: new Date("2024-12-31"),
-        wage: 50000,
+        ctc: 50000,
         status: "EXPIRED",
       },
     });
     await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), endDate: null, wage: 60000, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), endDate: null, ctc: 60000, status: "ACTIVE" },
     });
 
     const resolved = await resolveContractForPeriod(employeeId, new Date("2025-03-01"), new Date("2025-03-31"));
     expect(resolved).not.toBeNull();
-    expect(Number(resolved.wage)).toBe(60000);
+    expect(Number(resolved.ctc)).toBe(60000);
 
     const noMatch = await resolveContractForPeriod(employeeId, new Date("2023-01-01"), new Date("2023-01-31"));
     expect(noMatch).toBeNull();
@@ -54,12 +54,12 @@ describe("resolveContractForPeriod", () => {
     const employeeId = await makeEmployee();
 
     await prisma.contract.create({
-      data: { employeeId, startDate: new Date("2025-01-01"), endDate: null, wage: 60000, status: "ACTIVE" },
+      data: { employeeId, startDate: new Date("2025-01-01"), endDate: null, ctc: 60000, status: "ACTIVE" },
     });
 
     await expect(
       prisma.contract.create({
-        data: { employeeId, startDate: new Date("2025-06-01"), endDate: null, wage: 70000, status: "ACTIVE" },
+        data: { employeeId, startDate: new Date("2025-06-01"), endDate: null, ctc: 70000, status: "ACTIVE" },
       })
     ).rejects.toThrow();
   });

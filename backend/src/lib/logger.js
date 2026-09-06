@@ -10,7 +10,7 @@ const pinoHttp = require("pino-http");
 //
 // The req.body.* / newPassword paths are defensive: nothing currently wires
 // request bodies into the access log, but if that's ever added (e.g. for
-// debugging), a password or wage figure in a create/update payload must not
+// debugging), a password or CTC figure in a create/update payload must not
 // suddenly start flowing into logs by default.
 const REDACT_PATHS = [
   "req.headers.authorization",
@@ -19,7 +19,7 @@ const REDACT_PATHS = [
   "req.body.password",
   "req.body.newPassword",
   "req.body.passwordHash",
-  "req.body.wage",
+  "req.body.ctc",
 ];
 
 const httpLogger = pinoHttp({

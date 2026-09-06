@@ -37,7 +37,7 @@ async function makePaidPayslip({ employee, structure, periodStart, periodEnd, am
   const contract = contractId
     ? { id: contractId }
     : await prisma.contract.create({
-        data: { employeeId: employee.id, startDate: new Date("2020-01-01"), wage: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
+        data: { employeeId: employee.id, startDate: new Date("2020-01-01"), ctc: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
       });
   const payrun = await prisma.payrun.create({
     data: { name: `Payrun ${crypto.randomUUID()}`, salaryStructureId: structure.id, periodStart, periodEnd, status },
@@ -82,7 +82,7 @@ describe("dashboard aggregates", () => {
     const periodStart = new Date("2031-01-01");
     const periodEnd = new Date("2031-01-31");
     const contract = await prisma.contract.create({
-      data: { employeeId: employee.id, startDate: new Date("2020-01-01"), wage: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId: employee.id, startDate: new Date("2020-01-01"), ctc: 1000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
 
     await makePaidPayslip({ employee, structure, periodStart, periodEnd, amount: 900, status: "PAID", contractId: contract.id });
@@ -190,10 +190,10 @@ describe("dashboard aggregates", () => {
     const structure = await makeStructureWithNetRule();
     const employee = await makeEmployee("Sales-Test");
     await prisma.contract.create({
-      data: { employeeId: employee.id, startDate: new Date("2020-01-01"), endDate: new Date("2020-12-31"), wage: 5000, salaryStructureId: structure.id, status: "EXPIRED" },
+      data: { employeeId: employee.id, startDate: new Date("2020-01-01"), endDate: new Date("2020-12-31"), ctc: 60000, salaryStructureId: structure.id, status: "EXPIRED" },
     });
     await prisma.contract.create({
-      data: { employeeId: employee.id, startDate: new Date("2035-01-01"), wage: 3000, salaryStructureId: structure.id, status: "ACTIVE" },
+      data: { employeeId: employee.id, startDate: new Date("2035-01-01"), ctc: 36000, salaryStructureId: structure.id, status: "ACTIVE" },
     });
 
     const overview = await getDepartmentOverview({});

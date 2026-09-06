@@ -30,7 +30,7 @@ async function setupPayslip() {
   createdEmployeeIds.push(employee.id);
 
   const contract = await prisma.contract.create({
-    data: { employeeId: employee.id, startDate: new Date("2025-01-01"), wage: 50000, salaryStructureId: structure.id, status: "ACTIVE" },
+    data: { employeeId: employee.id, startDate: new Date("2025-01-01"), ctc: 50000, salaryStructureId: structure.id, status: "ACTIVE" },
   });
 
   const payrun = await prisma.payrun.create({

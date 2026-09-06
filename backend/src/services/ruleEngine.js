@@ -3,7 +3,7 @@ const { evaluateFormula } = require("./formulaEvaluator");
 // Variable names the payroll context seeds before any rule runs. A salary rule
 // may *read* these but must not be coded as one, or it would overwrite the
 // input its own siblings are reading from mid-walk.
-const RESERVED_CODES = new Set(["WAGE", "FULL_WAGE", "WORKED_RATIO", "WORKED_DAYS", "PERIOD_DAYS"]);
+const RESERVED_CODES = new Set(["WAGE", "FULL_WAGE", "ANNUAL_CTC", "WORKED_RATIO", "WORKED_DAYS", "PERIOD_DAYS"]);
 
 // Golden Rule #2: rules execute in `sequence` order and each rule's computed
 // amount is written into a running context that later rules read from — Net
@@ -15,13 +15,17 @@ const RESERVED_CODES = new Set(["WAGE", "FULL_WAGE", "WORKED_RATIO", "WORKED_DAY
 // arguments/return value, so it can run inside a BullMQ worker (Phase 5)
 // without any cross-employee interference inside a batch.
 //
-// Attendance proration enters here, and only here: WAGE is seeded as the
-// contract wage *already scaled* by the period's worked ratio, so an employee
-// present two days out of twenty-two is paid two days' worth. Every rule in
-// the structure derives from WAGE (BASIC is a share of it, allowances a share
-// of BASIC, deductions a share of GROSS, NET the running result), so a single
-// scaled seed prorates the entire payslip and every line still sums to the
-// NET printed on it — no rule has to know proration exists.
+// Contract.ctc is an ANNUAL Cost to Company figure — what HR actually
+// negotiates, not a monthly take-home someone has to pre-derive by hand
+// before it can go in the system. WAGE is that annual figure divided into a
+// monthly one and *already scaled* by the period's worked ratio, so an
+// employee present two days out of twenty-two is paid two days' worth of a
+// twelfth of their CTC. Every rule in the structure derives from WAGE (BASIC
+// is a share of it, allowances a share of BASIC, a balancing allowance makes
+// up the rest, deductions a share of GROSS, NET the running result), so a
+// single scaled seed prorates the entire payslip and every line still sums
+// to the NET printed on it — no rule has to know proration exists, and none
+// of them touch CTC directly.
 //
 // workedRatio defaults to 1 so a caller that hasn't measured attendance gets
 // the old full-month behaviour rather than a silently zeroed payslip.
@@ -34,12 +38,17 @@ function computePayslipLines({ contract, rules, workedRatio = 1, workedDays = nu
   }
 
   const orderedRules = [...rules].sort((a, b) => a.sequence - b.sequence);
+  const monthlyCtc = Number(contract.ctc) / 12;
   const context = {
-    WAGE: Number(contract.wage) * workedRatio,
-    // The unprorated figure, for a structure that needs the contractual wage
-    // regardless of attendance (a fixed stipend, a per-month insurance
-    // premium). Rules opt into it explicitly; WAGE stays the prorated default.
-    FULL_WAGE: Number(contract.wage),
+    WAGE: monthlyCtc * workedRatio,
+    // The unprorated monthly figure, for a structure that needs the full
+    // month's derived pay regardless of attendance (a fixed stipend, a
+    // per-month insurance premium). Rules opt into it explicitly; WAGE stays
+    // the prorated default.
+    FULL_WAGE: monthlyCtc,
+    // The raw annual figure, for the rare rule that genuinely needs it (an
+    // annual bonus provision, a gratuity accrual) rather than a monthly share.
+    ANNUAL_CTC: Number(contract.ctc),
     WORKED_RATIO: workedRatio,
     WORKED_DAYS: workedDays ?? 0,
     PERIOD_DAYS: periodDays ?? 0,
