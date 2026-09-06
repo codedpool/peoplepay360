@@ -375,13 +375,22 @@ async function main() {
         (a) => a.employeeId === e.id && a.timeOffTypeId === type.id && a.status === "ACTIVE"
       );
       if (!useLwp && !activeAlloc) continue;
+      // A real submission is now rejected outright once it exceeds the
+      // allocation's remaining balance (see timeOffRequests.routes.js) — the
+      // seed must respect the same rule, or every reseed reproduces exactly
+      // the "approved/pending request nobody could have actually filed" data
+      // integrity issue that rule exists to prevent.
+      if (!useLwp && Number(activeAlloc.remaining) <= 0) continue;
 
       // Spread across the year so far, ending near today rather than at a
       // fixed month.
       const start = new Date(Date.UTC(TODAY.getUTCFullYear(), randInt(0, TODAY.getUTCMonth()), randInt(1, 26)));
       const span = randInt(0, 3);
       const end = addDays(start, span);
-      const duration = type.unit === "HOURS" ? (span + 1) * 8 : span + 1;
+      const rawDuration = type.unit === "HOURS" ? (span + 1) * 8 : span + 1;
+      // Capped to what the allocation actually has, same as the API's own
+      // duration-ceiling and balance checks would enforce on a real submission.
+      const duration = useLwp ? rawDuration : Math.min(rawDuration, Number(activeAlloc.remaining));
       const status = weighted([["APPROVED", 50], ["PENDING", 30], ["REFUSED", 10], ["CANCELLED", 10]]);
 
       // Only an APPROVED request holds an allocation link — that is what a

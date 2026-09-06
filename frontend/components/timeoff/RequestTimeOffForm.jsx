@@ -4,10 +4,11 @@ import { useState, useMemo, useEffect } from "react";
 import ErrorNote from "../ui/ErrorNote";
 import Stamp from "../ui/Stamp";
 
-// Remaining balance across this type's ACTIVE allocations — an advisory sum
-// for the employee's own visibility. The real check (which allocation
-// actually covers these exact dates) happens server-side at approval time;
-// this just warns before they submit, it never blocks it.
+// Remaining balance across this type's ACTIVE allocations. The API rejects a
+// request that exceeds it (matching the exact allocation resolution approval
+// itself uses), so this is disabled here rather than shown as a soft warning
+// the submit would silently reject — a request that can never be approved
+// shouldn't be submittable in the first place.
 // A working day's worth of hours, used only to suggest a duration for
 // HOURS-based leave types. The authoritative per-employee figure lives in
 // their WorkingSchedule server-side; this is just the default in the form.
@@ -63,7 +64,7 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
     setDuration(String(suggested));
   }, [durationCeiling, spanDays, selectedType?.unit, durationEdited]);
 
-  const canSubmit = !datesInverted && !durationTooLong;
+  const canSubmit = !datesInverted && !durationTooLong && !insufficientBalance;
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -165,7 +166,8 @@ export default function RequestTimeOffForm({ types, allocations = [], submitting
             </button>
           ) : (
             <p className="text-[0.78rem] text-fade">
-              You can still submit — approval will be checked against your actual balance.
+              Reduce the duration or pick a different leave type — a request over the remaining balance can&apos;t be
+              submitted.
             </p>
           )}
         </div>

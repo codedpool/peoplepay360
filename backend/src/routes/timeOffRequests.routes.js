@@ -122,6 +122,35 @@ router.post(
       });
     }
 
+    // A request against a balance that can't cover it was previously allowed
+    // to sit PENDING forever — only approval checked the allocation, so it
+    // rejected there instead of never having been submittable. Checked here
+    // too now, against the exact same allocation approval will later resolve
+    // (same type/dates/ACTIVE-status match), so a request that can't possibly
+    // be approved is refused up front instead of sitting in the queue.
+    if (type.requiresAllocation) {
+      const allocation = await prisma.timeOffAllocation.findFirst({
+        where: {
+          employeeId: req.body.employeeId,
+          timeOffTypeId: req.body.timeOffTypeId,
+          status: "ACTIVE",
+          validFrom: { lte: req.body.startDate },
+          validTo: { gte: req.body.endDate },
+        },
+      });
+
+      if (!allocation) {
+        return res.status(400).json({ error: "No active allocation covers these dates for this leave type" });
+      }
+
+      const remaining = Number(allocation.remaining);
+      if (req.body.duration > remaining) {
+        return res.status(400).json({
+          error: `Insufficient balance: ${remaining} ${type.unit.toLowerCase()} remaining, ${req.body.duration} requested`,
+        });
+      }
+    }
+
     const request = await prisma.timeOffRequest.create({ data: { ...req.body, status: "PENDING" } });
     await invalidateDashboardCache();
     res.status(201).json(request);
